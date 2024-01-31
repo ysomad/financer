@@ -1,0 +1,46 @@
+syntax = "proto3";
+
+package expense.v1;
+option go_package = "expense/v1;expensev1";
+
+import "buf/validate/validate.proto";
+import "google/protobuf/empty.proto";
+
+// CategoryService works with user specific categories.
+service CategoryService {
+    rpc CreateCategory (CreateCategoryRequest) returns (Category);
+    rpc ListCategories (ListCategoriesRequest) returns (ListCategoriesResponse) {
+        option idempotency_level = NO_SIDE_EFFECTS;
+    };
+    rpc UpdateCategory (UpdateCategoryRequest) returns (Category);
+    rpc DeleteCategory (DeleteCategoryRequest) returns (google.protobuf.Empty);
+}
+
+message Category {
+    string id = 1;
+    string name = 2;
+}
+
+message CreateCategoryRequest {
+    string name = 1 [(buf.validate.field).string = { min_len: 2, max_len: 32 }];
+}
+
+message ListCategoriesRequest {
+    string search_query = 1;
+    int32 page_size = 50;
+    string page_token = 51;
+}
+
+message ListCategoriesResponse {
+    repeated Category categories = 1;
+    string next_page_token = 2;
+}
+
+message UpdateCategoryRequest {
+    string id = 1;
+    string name = 2;
+}
+
+message DeleteCategoryRequest {
+    string id = 1;
+}
