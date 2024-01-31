@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package settings.v1;
+option go_package = "settings/v1;settingsv1";
+
+import "google/protobuf/empty.proto";
+
+// SettingsService specifies methods for working with user specific settings.
+service SettingsService {
+    rpc GetSettings (google.protobuf.Empty) returns (Settings) {
+        option idempotency_level = NO_SIDE_EFFECTS;
+    };
+    rpc UpdateSettings (UpdateSettingsRequest) returns (Settings);
+}
+
+message Settings {
+    string default_currency = 1; // ISO 4217
+}
+
+message UpdateSettingsRequest {
+    string currency = 1; // ISO 4217
+}
