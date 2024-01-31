@@ -4,10 +4,9 @@ package account.v1;
 option go_package = "account/v1;accountv1";
 
 import "buf/validate/validate.proto";
-import "google/protobuf/timestamp.proto";
 
 service AccountService {
-    rpc CreateAccount (CreateAccountRequest) returns (CreateAccountResponse);
+    rpc CreateAccount (CreateAccountRequest) returns (Account);
 }
 
 enum SignUpSource {
@@ -19,9 +18,6 @@ enum SignUpSource {
 message Account {
     string id = 1;
     string username = 2;
-    bool verified = 3;
-    google.protobuf.Timestamp create_time = 50;
-    google.protobuf.Timestamp update_time = 51;
 }
 
 message CreateAccountRequest {
@@ -30,6 +26,3 @@ message CreateAccountRequest {
     SignUpSource source = 3 [(buf.validate.field).enum = { in: [1, 2] }];
 }
 
-message CreateAccountResponse {
-    Account account = 1;
-}
