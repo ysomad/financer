@@ -22,7 +22,7 @@ type Bot struct {
 
 const msgInternal = "Чет я поднаебнулся, попробуй позже..."
 
-func NewBot(conf tgbotconf.Config, id connectpb.IdentityServiceClient, t connectpb.AccessTokenServiceClient) *Bot {
+func New(conf tgbotconf.Config, id connectpb.IdentityServiceClient, t connectpb.AccessTokenServiceClient) *Bot {
 	return &Bot{conf: conf, identity: id, token: t}
 }
 
@@ -45,6 +45,8 @@ func (b *Bot) HandleStart(c telebot.Context) error {
 		slog.Error("access token not issued", "err", err.Error())
 		return c.Send(msgInternal)
 	}
+
+	// Save token to cache tguid -> token
 
 	return c.Send(resp.Msg.AccessToken)
 }

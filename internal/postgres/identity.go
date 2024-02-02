@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/Masterminds/squirrel"
+	sq "github.com/Masterminds/squirrel"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
@@ -57,7 +57,19 @@ func (s *IdentityStorage) Insert(ctx context.Context, in InsertIdentityIn) error
 		Values(in.TelegramUID, in.ID, in.DefaultCurrency).
 		ToSql()
 	if err != nil {
-		return fmt.Errorf("query build error: %w", err)
+		return err
+	}
+
+	// add categories without author to identity (default categories)
+	sql3, args3, err := s.Builder.
+		Insert("identity_categories").
+		Columns("identity_id", "category").
+		Select(
+			sq.Select(fmt.Sprintf("'%s'", in.ID), "name").
+				From("categories").
+				Where(sq.Eq{"author": nil})).ToSql()
+	if err != nil {
+		return err
 	}
 
 	err = pgx.BeginTxFunc(ctx, s.Pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
@@ -67,6 +79,10 @@ func (s *IdentityStorage) Insert(ctx context.Context, in InsertIdentityIn) error
 
 		if _, err := tx.Exec(ctx, sql2, args2...); err != nil {
 			return fmt.Errorf("identity traits not saved: %w", err)
+		}
+
+		if _, err := tx.Exec(ctx, sql3, args3...); err != nil {
+			return fmt.Errorf("default categories not attached to identity: %w", err)
 		}
 
 		return nil
@@ -88,7 +104,7 @@ func (s *IdentityStorage) FindByTelegramUID(ctx context.Context, uid int64) (Ide
 			"t.telegram_uid telegram_uid").
 		From("identity_traits t").
 		InnerJoin("identities i on t.identity_id = i.id").
-		Where(squirrel.Eq{"telegram_uid": uid}).ToSql()
+		Where(sq.Eq{"telegram_uid": uid}).ToSql()
 	if err != nil {
 		return Identity{}, err
 	}

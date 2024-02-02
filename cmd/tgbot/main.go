@@ -55,7 +55,7 @@ func main() {
 	accessTokenClient := telegramv1connect.NewAccessTokenServiceClient(httpClient, conf.Server.URL,
 		connect.WithInterceptors(validateInterceptor))
 
-	bot := tgbot.NewBot(conf, identityClient, accessTokenClient)
+	bot := tgbot.New(conf, identityClient, accessTokenClient)
 
 	b.Handle("/start", bot.HandleStart)
 
