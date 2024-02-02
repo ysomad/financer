@@ -10,13 +10,13 @@ service IdentityService {
 
 message Identity {
     string id = 1;
-    int64 telegram_uid = 2;
+    int64 tg_uid = 2;
 }
 
 message CreateIdentityRequest {
-    int64 telegram_uid = 1;
+    int64 tg_uid = 1;
 }
 
 message GetIdentityByTelegramUIDRequest {
-    int64 telegram_uid = 1;
+    int64 tg_uid = 1;
 }

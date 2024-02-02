@@ -15,7 +15,7 @@ service IdentityTraitsService {
 
 message IdentityTraits {
     string default_currency = 1; // ISO 4217
-    int64 telegram_uid = 2;
+    int64 tg_uid = 2;
 }
 
 message UpdateIdentityTraitsRequest {

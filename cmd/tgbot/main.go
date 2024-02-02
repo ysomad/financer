@@ -47,18 +47,18 @@ func main() {
 		telegramUID := c.Chat().ID
 		ctx := context.Background()
 
-		req := newServerRequest(&pb.GetIdentityByTelegramUIDRequest{TelegramUid: telegramUID}, conf.ServerAPIKey)
+		req := newServerRequest(&pb.GetIdentityByTelegramUIDRequest{TgUid: telegramUID}, conf.ServerAPIKey)
 
 		res, err := identity.GetIdentityByTelegramUID(ctx, req)
 		// user with telegram id found
 		if err == nil {
-			slog.Info("identity found", "tg_uid", res.Msg.TelegramUid, "id", res.Msg.Id)
+			slog.Info("identity found", "tg_uid", res.Msg.TgUid, "id", res.Msg.Id)
 			return c.Send(res.Msg.GetId())
 		}
 
 		// user with telegram id not found
 		if connectErr := new(connect.Error); errors.As(err, &connectErr) && connectErr.Code() == connect.CodeNotFound {
-			req := newServerRequest(&pb.CreateIdentityRequest{TelegramUid: telegramUID}, conf.ServerAPIKey)
+			req := newServerRequest(&pb.CreateIdentityRequest{TgUid: telegramUID}, conf.ServerAPIKey)
 
 			res, err := identity.CreateIdentity(ctx, req)
 			if err != nil {
@@ -66,7 +66,7 @@ func main() {
 				return c.Send("Я поднаебнулся, пробуй позже")
 			}
 
-			slog.Info("identity created", "tg_uid", res.Msg.TelegramUid, "id", res.Msg.Id)
+			slog.Info("identity created", "tg_uid", res.Msg.TgUid, "id", res.Msg.Id)
 		}
 
 		return nil
@@ -79,7 +79,4 @@ func newServerRequest[T any](msg *T, apiKey string) *connect.Request[T] {
 	r := connect.NewRequest(msg)
 	r.Header().Set("X-API-KEY", apiKey)
 	return r
-}
-
-func startHandler(c tele.Context) error {
 }

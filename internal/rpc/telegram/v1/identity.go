@@ -30,7 +30,7 @@ func (s *IdentityServer) CreateIdentity(ctx context.Context,
 	err := s.identity.Insert(ctx, postgres.InsertIdentityIn{
 		ID:              id,
 		CreatedAt:       time.Now(),
-		TelegramUID:     r.Msg.TelegramUid,
+		TelegramUID:     r.Msg.TgUid,
 		DefaultCurrency: "RUB",
 	})
 	if err != nil {
@@ -38,15 +38,15 @@ func (s *IdentityServer) CreateIdentity(ctx context.Context,
 	}
 
 	return connect.NewResponse(&pb.Identity{
-		Id:          id,
-		TelegramUid: r.Msg.TelegramUid,
+		Id:    id,
+		TgUid: r.Msg.TgUid,
 	}), nil
 }
 
 func (s *IdentityServer) GetIdentityByTelegramUID(ctx context.Context,
 	r *connect.Request[pb.GetIdentityByTelegramUIDRequest],
 ) (*connect.Response[pb.Identity], error) {
-	identity, err := s.identity.FindByTelegramUID(ctx, r.Msg.TelegramUid)
+	identity, err := s.identity.FindByTelegramUID(ctx, r.Msg.TgUid)
 	if err != nil {
 		if errors.Is(err, postgres.ErrIdentityNotFound) {
 			return nil, connect.NewError(connect.CodeNotFound, postgres.ErrIdentityNotFound)
@@ -56,7 +56,7 @@ func (s *IdentityServer) GetIdentityByTelegramUID(ctx context.Context,
 	}
 
 	return connect.NewResponse(&pb.Identity{
-		Id:          identity.ID,
-		TelegramUid: identity.TelegramUID.Int64,
+		Id:    identity.ID,
+		TgUid: identity.TelegramUID.Int64,
 	}), nil
 }
