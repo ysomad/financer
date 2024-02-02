@@ -1,0 +1,2 @@
+- all telegram rpc requests must contain X-API-KEY header
+- package is suitable for requests from telegram bot only

@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package telegram.v1;
+option go_package = "telegram/v1;telegramv1";
+
+service IdentityService {
+    rpc CreateIdentity (CreateIdentityRequest) returns (Identity);
+    rpc GetIdentityByTelegramUID (GetIdentityByTelegramUIDRequest) returns (Identity);
+}
+
+message Identity {
+    string id = 1;
+    int64 telegram_uid = 2;
+}
+
+message CreateIdentityRequest {
+    int64 telegram_uid = 1;
+}
+
+message GetIdentityByTelegramUIDRequest {
+    int64 telegram_uid = 1;
+}

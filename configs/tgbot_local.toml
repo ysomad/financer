@@ -1,0 +1,2 @@
+log_level = "debug"
+server_url = "http://localhost:8080"
