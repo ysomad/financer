@@ -3,3 +3,9 @@ log_level = "debug"
 [server]
 url = "http://localhost:8080"
 client_timeout = "1s"
+
+[redis]
+addr = ":6379"
+write_timeout = "1s"
+read_timeout = "1s"
+pool_size = 1

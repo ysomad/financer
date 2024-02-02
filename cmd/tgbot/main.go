@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"log/slog"
 	"net/http"
@@ -10,6 +11,7 @@ import (
 	"connectrpc.com/connect"
 	"connectrpc.com/validate"
 	"github.com/ilyakaznacheev/cleanenv"
+	"github.com/redis/go-redis/v9"
 	tele "gopkg.in/telebot.v3"
 
 	"github.com/ysomad/financer/internal/gen/proto/telegram/v1/telegramv1connect"
@@ -31,9 +33,25 @@ func main() {
 
 	slog.Debug("loaded config", "conf", conf)
 
-	// TODO: change to webhook
+	// redis
+	rdb := redis.NewClient(&redis.Options{
+		Addr:         conf.Redis.Addr,
+		Password:     conf.Redis.Password,
+		ReadTimeout:  conf.Redis.ReadTimeout,
+		WriteTimeout: conf.Redis.WriteTimeout,
+		PoolSize:     conf.Redis.PoolSize,
+	})
+
+	cmd := rdb.Ping(context.Background())
+	err := cmd.Err()
+	if err != nil {
+		slogx.Fatal("redis client not created", err)
+	}
+
 	b, err := tele.NewBot(tele.Settings{
-		Token:  conf.AccessToken,
+		Token: conf.AccessToken,
+
+		// TODO: change to webhook
 		Poller: &tele.LongPoller{Timeout: time.Second},
 	})
 	if err != nil {
@@ -55,7 +73,7 @@ func main() {
 	accessTokenClient := telegramv1connect.NewAccessTokenServiceClient(httpClient, conf.Server.URL,
 		connect.WithInterceptors(validateInterceptor))
 
-	bot := tgbot.New(conf, identityClient, accessTokenClient)
+	bot := tgbot.New(conf, rdb, identityClient, accessTokenClient)
 
 	b.Handle("/start", bot.HandleStart)
 

@@ -5,10 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"connectrpc.com/connect"
 	"gopkg.in/telebot.v3"
 
+	"github.com/redis/go-redis/v9"
 	pb "github.com/ysomad/financer/internal/gen/proto/telegram/v1"
 	connectpb "github.com/ysomad/financer/internal/gen/proto/telegram/v1/telegramv1connect"
 	"github.com/ysomad/financer/internal/tgbotconf"
@@ -16,14 +18,17 @@ import (
 
 type Bot struct {
 	conf     tgbotconf.Config
+	redis    *redis.Client
 	identity connectpb.IdentityServiceClient
 	token    connectpb.AccessTokenServiceClient
 }
 
 const msgInternal = "Чет я поднаебнулся, попробуй позже..."
 
-func New(conf tgbotconf.Config, id connectpb.IdentityServiceClient, t connectpb.AccessTokenServiceClient) *Bot {
-	return &Bot{conf: conf, identity: id, token: t}
+var cacheTTL = time.Minute * 5
+
+func New(conf tgbotconf.Config, r *redis.Client, id connectpb.IdentityServiceClient, t connectpb.AccessTokenServiceClient) *Bot {
+	return &Bot{conf: conf, identity: id, token: t, redis: r}
 }
 
 func (b *Bot) HandleStart(c telebot.Context) error {
@@ -46,7 +51,10 @@ func (b *Bot) HandleStart(c telebot.Context) error {
 		return c.Send(msgInternal)
 	}
 
-	// Save token to cache tguid -> token
+	if err := b.redis.Set(ctx, fmt.Sprintf("access_token:%d", tgUID), resp.Msg.AccessToken, cacheTTL).Err(); err != nil {
+		slog.Error("access key not saved to cache")
+		return nil
+	}
 
 	return c.Send(resp.Msg.AccessToken)
 }
