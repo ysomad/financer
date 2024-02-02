@@ -1,8 +1,6 @@
 package main
 
 import (
-	"context"
-	"errors"
 	"log"
 	"log/slog"
 	"net/http"
@@ -10,11 +8,13 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
+	"connectrpc.com/validate"
 	"github.com/ilyakaznacheev/cleanenv"
 	tele "gopkg.in/telebot.v3"
 
-	pb "github.com/ysomad/financer/internal/gen/proto/telegram/v1"
-	tgv1 "github.com/ysomad/financer/internal/gen/proto/telegram/v1/telegramv1connect"
+	"github.com/ysomad/financer/internal/gen/proto/telegram/v1/telegramv1connect"
+	"github.com/ysomad/financer/internal/slogx"
+	"github.com/ysomad/financer/internal/tgbot"
 	"github.com/ysomad/financer/internal/tgbotconf"
 )
 
@@ -31,46 +31,33 @@ func main() {
 
 	slog.Debug("loaded config", "conf", conf)
 
+	// TODO: change to webhook
 	b, err := tele.NewBot(tele.Settings{
 		Token:  conf.AccessToken,
-		Poller: &tele.LongPoller{Timeout: 10 * time.Second},
+		Poller: &tele.LongPoller{Timeout: time.Second},
 	})
 	if err != nil {
-		log.Fatal(err)
-		return
+		slogx.Fatal("telebot not created", err)
 	}
 
-	identity := tgv1.NewIdentityServiceClient(http.DefaultClient,
-		conf.ServerURL, connect.WithHTTPGet())
+	httpClient := &http.Client{
+		Timeout: conf.Server.ClientTimeout,
+	}
 
-	b.Handle("/start", func(c tele.Context) error {
-		telegramUID := c.Chat().ID
-		ctx := context.Background()
+	validateInterceptor, err := validate.NewInterceptor()
+	if err != nil {
+		slogx.Fatal("validate interceptor not created", err)
+	}
 
-		req := newServerRequest(&pb.GetIdentityByTelegramUIDRequest{TgUid: telegramUID}, conf.ServerAPIKey)
+	identityClient := telegramv1connect.NewIdentityServiceClient(httpClient,
+		conf.Server.URL, connect.WithHTTPGet(), connect.WithInterceptors(validateInterceptor))
 
-		res, err := identity.GetIdentityByTelegramUID(ctx, req)
-		// user with telegram id found
-		if err == nil {
-			slog.Info("identity found", "tg_uid", res.Msg.TgUid, "id", res.Msg.Id)
-			return c.Send(res.Msg.GetId())
-		}
+	accessTokenClient := telegramv1connect.NewAccessTokenServiceClient(httpClient, conf.Server.URL,
+		connect.WithInterceptors(validateInterceptor))
 
-		// user with telegram id not found
-		if connectErr := new(connect.Error); errors.As(err, &connectErr) && connectErr.Code() == connect.CodeNotFound {
-			req := newServerRequest(&pb.CreateIdentityRequest{TgUid: telegramUID}, conf.ServerAPIKey)
+	bot := tgbot.NewBot(conf, identityClient, accessTokenClient)
 
-			res, err := identity.CreateIdentity(ctx, req)
-			if err != nil {
-				slog.Error("identity not created", "err", err.Error(), "uid", telegramUID)
-				return c.Send("Я поднаебнулся, пробуй позже")
-			}
-
-			slog.Info("identity created", "tg_uid", res.Msg.TgUid, "id", res.Msg.Id)
-		}
-
-		return nil
-	})
+	b.Handle("/start", bot.HandleStart)
 
 	b.Start()
 }

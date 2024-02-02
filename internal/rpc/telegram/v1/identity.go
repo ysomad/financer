@@ -7,9 +7,9 @@ import (
 
 	"connectrpc.com/connect"
 
-	"github.com/google/uuid"
 	pb "github.com/ysomad/financer/internal/gen/proto/telegram/v1"
 	connectpb "github.com/ysomad/financer/internal/gen/proto/telegram/v1/telegramv1connect"
+	"github.com/ysomad/financer/internal/guid"
 	"github.com/ysomad/financer/internal/postgres"
 )
 
@@ -26,9 +26,10 @@ func NewIdentityServer(id *postgres.IdentityStorage) *IdentityServer {
 func (s *IdentityServer) CreateIdentity(ctx context.Context,
 	r *connect.Request[pb.CreateIdentityRequest],
 ) (*connect.Response[pb.Identity], error) {
-	id := uuid.New().String()
+	identityID := guid.New("identity")
+
 	err := s.identity.Insert(ctx, postgres.InsertIdentityIn{
-		ID:              id,
+		ID:              identityID,
 		CreatedAt:       time.Now(),
 		TelegramUID:     r.Msg.TgUid,
 		DefaultCurrency: "RUB",
@@ -38,7 +39,7 @@ func (s *IdentityServer) CreateIdentity(ctx context.Context,
 	}
 
 	return connect.NewResponse(&pb.Identity{
-		Id:    id,
+		Id:    identityID,
 		TgUid: r.Msg.TgUid,
 	}), nil
 }

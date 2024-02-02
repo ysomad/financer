@@ -1,2 +1,5 @@
 log_level = "debug"
-server_url = "http://localhost:8080"
+
+[server]
+url = "http://localhost:8080"
+client_timeout = "1s"

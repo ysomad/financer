@@ -3,6 +3,8 @@ syntax = "proto3";
 package telegram.v1;
 option go_package = "telegram/v1;telegramv1";
 
+import "buf/validate/validate.proto";
+
 service IdentityService {
     rpc CreateIdentity (CreateIdentityRequest) returns (Identity);
     rpc GetIdentityByTelegramUID (GetIdentityByTelegramUIDRequest) returns (Identity);
@@ -14,7 +16,7 @@ message Identity {
 }
 
 message CreateIdentityRequest {
-    int64 tg_uid = 1;
+    int64 tg_uid = 1 [(buf.validate.field).required = true];
 }
 
 message GetIdentityByTelegramUIDRequest {

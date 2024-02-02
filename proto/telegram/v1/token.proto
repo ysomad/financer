@@ -3,13 +3,15 @@ syntax = "proto3";
 package telegram.v1;
 option go_package = "telegram/v1;telegramv1";
 
+import "buf/validate/validate.proto";
+
 service AccessTokenService {
     // IssueAccessToken issues token for user with telegram id by telegram bot. X-API-KEY header must be provided.
     rpc IssueAccessToken (IssueAccessTokenRequest) returns (IssueAccessTokenResponse);
 }
 
 message IssueAccessTokenRequest {
-    int64 tg_uid = 2;
+    int64 tg_uid = 2 [(buf.validate.field).required = true];
 }
 
 message IssueAccessTokenResponse {

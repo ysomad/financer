@@ -11,6 +11,7 @@ import (
 	"syscall"
 
 	"connectrpc.com/connect"
+	"connectrpc.com/validate"
 	"github.com/ilyakaznacheev/cleanenv"
 	_ "github.com/jackc/pgx/v5/stdlib" // for goose running migrations via pgx
 	"github.com/pressly/goose/v3"
@@ -22,6 +23,7 @@ import (
 	"github.com/ysomad/financer/internal/rpc"
 	v1 "github.com/ysomad/financer/internal/rpc/telegram/v1"
 	"github.com/ysomad/financer/internal/serverconf"
+	"github.com/ysomad/financer/internal/slogx"
 )
 
 func main() {
@@ -55,20 +57,31 @@ func main() {
 	// postgres
 	pgclient, err := pgclient.New(conf.PostgresURL)
 	if err != nil {
-		logFatal("postgres client not created", err)
+		slogx.Fatal("postgres client not created", err)
 	}
 
 	identityStorage := postgres.NewIdentityStorage(pgclient)
 
 	// connect
+	validateInterceptor, err := validate.NewInterceptor()
+	if err != nil {
+		slogx.Fatal("validate interceptor not created", err)
+	}
 
-	tgInterceptor := rpc.NewTelegramInterceptor(conf.APIKey)
+	tgInterceptor := rpc.NewAPIKeyInterceptor(conf.APIKey)
 
 	mux := http.NewServeMux()
 
 	// identity service
 	identitysrv := v1.NewIdentityServer(identityStorage)
-	path, handler := telegramv1connect.NewIdentityServiceHandler(identitysrv, connect.WithInterceptors(tgInterceptor))
+	path, handler := telegramv1connect.NewIdentityServiceHandler(identitysrv,
+		connect.WithInterceptors(validateInterceptor, tgInterceptor))
+	mux.Handle(path, handler)
+
+	// access token service
+	tokensrv := v1.NewTokenServer(identityStorage, conf.AccessToken)
+	path, handler = telegramv1connect.NewAccessTokenServiceHandler(tokensrv,
+		connect.WithInterceptors(validateInterceptor, tgInterceptor))
 	mux.Handle(path, handler)
 
 	srv := httpserver.New(mux, httpserver.WithAddr("0.0.0.0", conf.Port))
@@ -86,11 +99,6 @@ func main() {
 	if err := srv.Shutdown(); err != nil {
 		slog.Error("got error on http server shutdown", "error", err.Error())
 	}
-}
-
-func logFatal(msg string, err error) {
-	slog.Error(msg, "err", err.Error())
-	os.Exit(1)
 }
 
 func mustMigrate(dsn, migrationsDir string) {

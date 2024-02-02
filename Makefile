@@ -36,7 +36,7 @@ dry-run-server: goose-reset run-server-migrate
 
 .PHONY: compose-up
 compose-up:
-	docker-compose up --build -d postgres && docker-compose logs -f
+	docker-compose up --build -d && docker-compose logs -f
 
 .PHONY: compose-down
 compose-down:

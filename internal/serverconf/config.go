@@ -3,6 +3,7 @@ package serverconf
 import (
 	"log/slog"
 	"strings"
+	"time"
 )
 
 type Config struct {
@@ -12,7 +13,13 @@ type Config struct {
 	// APIKey for accessing from telegram bot
 	APIKey string `env:"SERVER_API_KEY" env-required:"true"`
 
-	PostgresURL string `env:"PG_URL" env-required:"true"`
+	PostgresURL string      `env:"PG_URL" env-required:"true"`
+	AccessToken AccessToken `toml:"access_token"`
+}
+
+type AccessToken struct {
+	SecretKey string        `env:"SERVER_ACCCESS_TOKEN_SECRET" env-required:"true"`
+	TTL       time.Duration `toml:"ttl" env-required:"true"`
 }
 
 func (c *Config) SlogLogLevel() slog.Level {
