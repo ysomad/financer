@@ -11,13 +11,14 @@ import (
 	"connectrpc.com/connect"
 	"connectrpc.com/validate"
 	"github.com/ilyakaznacheev/cleanenv"
-	"github.com/redis/go-redis/v9"
+	goredis "github.com/redis/go-redis/v9"
 	tele "gopkg.in/telebot.v3"
 
 	"github.com/ysomad/financer/internal/gen/proto/telegram/v1/telegramv1connect"
 	"github.com/ysomad/financer/internal/slogx"
 	"github.com/ysomad/financer/internal/tgbot"
 	"github.com/ysomad/financer/internal/tgbot/config"
+	"github.com/ysomad/financer/internal/tgbot/redis"
 )
 
 func main() {
@@ -34,7 +35,7 @@ func main() {
 	slog.Debug("loaded config", "conf", conf)
 
 	// redis
-	rdb := redis.NewClient(&redis.Options{
+	rdb := goredis.NewClient(&goredis.Options{
 		Addr:         conf.Redis.Addr,
 		Password:     conf.Redis.Password,
 		ReadTimeout:  conf.Redis.ReadTimeout,
@@ -48,11 +49,16 @@ func main() {
 		slogx.Fatal("redis client not created", err)
 	}
 
+	identityCache := redis.NewIdentityCache(rdb, conf.Cache.IdentityTTL)
+	stateCache := redis.NewStateCache(rdb, conf.Cache.StateTTL)
+
+	// telegram
 	b, err := tele.NewBot(tele.Settings{
 		Token: conf.AccessToken,
 
 		// TODO: change to webhook
-		Poller: &tele.LongPoller{Timeout: time.Second},
+		Poller:  &tele.LongPoller{Timeout: time.Second},
+		Verbose: conf.Debug,
 	})
 	if err != nil {
 		slogx.Fatal("telebot not created", err)
@@ -67,16 +73,26 @@ func main() {
 		slogx.Fatal("validate interceptor not created", err)
 	}
 
-	identityClient := telegramv1connect.NewIdentityServiceClient(httpClient,
-		conf.Server.URL, connect.WithHTTPGet(), connect.WithInterceptors(validateInterceptor))
-
-	accessTokenClient := telegramv1connect.NewAccessTokenServiceClient(httpClient, conf.Server.URL,
+	identityClient := telegramv1connect.NewIdentityServiceClient(
+		httpClient,
+		conf.Server.URL,
+		connect.WithHTTPGet(),
 		connect.WithInterceptors(validateInterceptor))
 
-	bot := tgbot.New(conf, rdb, identityClient, accessTokenClient)
+	accessTokenClient := telegramv1connect.NewAccessTokenServiceClient(
+		httpClient,
+		conf.Server.URL,
+		connect.WithInterceptors(validateInterceptor))
 
-	b.Handle("/start", bot.HandleStart)
+	bot := tgbot.New(conf, rdb, tgbot.IdentityService{
+		Client: identityClient,
+		Cache:  identityCache,
+	}, accessTokenClient, stateCache)
 
+	b.Handle("/start", bot.Start)
+	b.Handle("/set_currency", bot.CmdSetCurrency)
+
+	b.Handle(tele.OnCallback, bot.HandleCallback)
 	b.Start()
 }
 

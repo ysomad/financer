@@ -9,40 +9,43 @@ CREATE TABLE IF NOT EXISTS identities (
 
 CREATE TABLE IF NOT EXISTS identity_traits (
     identity_id varchar(64) NOT NULL UNIQUE REFERENCES identities (id),
-    default_currency char(3) NOT NULL,
+    currency char(3) NOT NULL,
     telegram_uid bigint UNIQUE
 );
 
+CREATE TYPE category_type AS ENUM ('Expenses', 'Earnings');
+
 CREATE TABLE IF NOT EXISTS categories (
     name varchar(64) PRIMARY KEY NOT NULL,
-    description text,
+    type category_type NOT NULL,
     author varchar(64) REFERENCES identities (id),
     created_at timestamptz NOT NULL
 );
 
-INSERT INTO categories(name, description, created_at) VALUES
-    ('Rent', 'Payments for rent', CURRENT_TIMESTAMP),
-    ('Public utilities', 'Public utilities payments, usually comes with rent', CURRENT_TIMESTAMP),
-    ('Telecommunications', 'Payments for mobile plans and internet in general', CURRENT_TIMESTAMP),
-    ('Sport', 'Gym memberships and coach expenses', CURRENT_TIMESTAMP),
-    ('Groceries', 'Grocery stores expenses', CURRENT_TIMESTAMP),
-    ('Home', 'Home decor, accessories etc', CURRENT_TIMESTAMP),
-    ('Food service', 'Food delivery and restaraunt expenses', CURRENT_TIMESTAMP),
-    ('Entertainment', 'Cinema, clubs, games, theaters etc', CURRENT_TIMESTAMP),
-    ('Healthcare', 'Doctor consultions, bloodwork and other healthcare expenses', CURRENT_TIMESTAMP),
-    ('Pharmacy', 'Medication purchases', CURRENT_TIMESTAMP),
-    ('Selfcare', 'Barbers and expenses on selfcare products including fragrances', CURRENT_TIMESTAMP),
-    ('Electronics', 'Expenses for any electronics', CURRENT_TIMESTAMP),
-    ('Shopping', 'Clothes, shoes and accessories expenses', CURRENT_TIMESTAMP),
-    ('Trips', 'Expenses on any long distance trips', CURRENT_TIMESTAMP),
-    ('Public transport', 'Buses, trams and other public transport', CURRENT_TIMESTAMP),
-    ('Taxi', 'Taxi expenses', CURRENT_TIMESTAMP),
-    ('Gifts', 'Gifts expenses', CURRENT_TIMESTAMP),
-    ('Education', 'Books, courses etc', CURRENT_TIMESTAMP),
-    ('Online services', 'Online service subscriptions, like Spotify Premium and other', CURRENT_TIMESTAMP),
-    ('Other', 'I dont know what I spent my money on', CURRENT_TIMESTAMP),
-    ('Taxes', 'PLOTI NALOGI', CURRENT_TIMESTAMP),
-    ('Earnings', 'did i lose more than earn?', CURRENT_TIMESTAMP);
+INSERT INTO categories(name, type, created_at) VALUES
+    ('🛏️Rent', 'Expenses', CURRENT_TIMESTAMP),
+    ('💡Public utilities', 'Expenses', CURRENT_TIMESTAMP),
+    ('🌐Telecommunications', 'Expenses', CURRENT_TIMESTAMP),
+    ('💪Sport', 'Expenses', CURRENT_TIMESTAMP),
+    ('🍏Groceries', 'Expenses', CURRENT_TIMESTAMP),
+    ('🕯️Home', 'Expenses', CURRENT_TIMESTAMP),
+    ('🍕Food service', 'Expenses', CURRENT_TIMESTAMP),
+    ('🎮Entertainment', 'Expenses', CURRENT_TIMESTAMP),
+    ('🏥Healthcare', 'Expenses', CURRENT_TIMESTAMP),
+    ('💊Pharmacy', 'Expenses', CURRENT_TIMESTAMP),
+    ('🛀Selfcare', 'Expenses', CURRENT_TIMESTAMP),
+    ('💻Electronics', 'Expenses', CURRENT_TIMESTAMP),
+    ('🛍️Shopping', 'Expenses', CURRENT_TIMESTAMP),
+    ('✈️Trips', 'Expenses', CURRENT_TIMESTAMP),
+    ('🚌Public transport', 'Expenses', CURRENT_TIMESTAMP),
+    ('🚕Taxi', 'Expenses', CURRENT_TIMESTAMP),
+    ('🎁Gifts', 'Expenses', CURRENT_TIMESTAMP),
+    ('📚Education', 'Expenses', CURRENT_TIMESTAMP),
+    ('📧Online services', 'Expenses', CURRENT_TIMESTAMP),
+    ('🏛️Taxes', 'Expenses', CURRENT_TIMESTAMP),
+    ('🤷Other', 'Expenses', CURRENT_TIMESTAMP),
+    ('💳Salary', 'Earnings', CURRENT_TIMESTAMP),
+    ('💰Bonuses', 'Earnings', CURRENT_TIMESTAMP);
 
 CREATE TABLE IF NOT EXISTS identity_categories (
     identity_id varchar(64) NOT NULL REFERENCES identities (id),
@@ -55,6 +58,7 @@ CREATE TABLE IF NOT EXISTS identity_categories (
 -- +goose StatementBegin
 DROP TABLE IF EXISTS identity_categories;
 DROP TABLE IF EXISTS categories;
+DROP TYPE IF EXISTS category_type;
 DROP TABLE IF EXISTS identity_traits;
 DROP TABLE IF EXISTS identities;
 -- +goose StatementEnd

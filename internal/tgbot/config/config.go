@@ -9,6 +9,8 @@ type Config struct {
 	AccessToken string `env:"TGBOT_ACCESS_TOKEN" env-required:"true"`
 	Server      Server `toml:"server"`
 	Redis       Redis  `toml:"redis"`
+	Debug       bool   `toml:"debug"`
+	Cache       Cache  `toml:"cache"`
 }
 
 type Server struct {
@@ -23,4 +25,9 @@ type Redis struct {
 	ReadTimeout  time.Duration `toml:"read_timeout" env-required:"true"`
 	WriteTimeout time.Duration `toml:"write_timeout" env-required:"true"`
 	PoolSize     int           `toml:"pool_size" env-required:"true"`
+}
+
+type Cache struct {
+	StateTTL    time.Duration `toml:"state_ttl" env-required:"true"`
+	IdentityTTL time.Duration `toml:"identity_ttl" env-required:"true"`
 }

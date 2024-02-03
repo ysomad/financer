@@ -23,24 +23,27 @@ func NewIdentityServer(id *postgres.IdentityStorage) *IdentityServer {
 	return &IdentityServer{identity: id}
 }
 
+const defaultCurrency = "RUB"
+
 func (s *IdentityServer) CreateIdentity(ctx context.Context,
 	r *connect.Request[pb.CreateIdentityRequest],
 ) (*connect.Response[pb.Identity], error) {
 	identityID := guid.New("identity")
 
 	err := s.identity.Insert(ctx, postgres.InsertIdentityIn{
-		ID:              identityID,
-		CreatedAt:       time.Now(),
-		TelegramUID:     r.Msg.TgUid,
-		DefaultCurrency: "RUB",
+		ID:          identityID,
+		CreatedAt:   time.Now(),
+		TelegramUID: r.Msg.TgUid,
+		Currency:    defaultCurrency,
 	})
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 
 	return connect.NewResponse(&pb.Identity{
-		Id:    identityID,
-		TgUid: r.Msg.TgUid,
+		Id:       identityID,
+		TgUid:    r.Msg.TgUid,
+		Currency: defaultCurrency,
 	}), nil
 }
 
@@ -57,7 +60,8 @@ func (s *IdentityServer) GetIdentityByTelegramUID(ctx context.Context,
 	}
 
 	return connect.NewResponse(&pb.Identity{
-		Id:    identity.ID,
-		TgUid: identity.TelegramUID.Int64,
+		Id:       identity.ID,
+		TgUid:    identity.TelegramUID.Int64,
+		Currency: identity.Currency,
 	}), nil
 }

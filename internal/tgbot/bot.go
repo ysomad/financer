@@ -5,97 +5,208 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"connectrpc.com/connect"
 	"gopkg.in/telebot.v3"
 
-	"github.com/redis/go-redis/v9"
+	goredis "github.com/redis/go-redis/v9"
 	pb "github.com/ysomad/financer/internal/gen/proto/telegram/v1"
 	connectpb "github.com/ysomad/financer/internal/gen/proto/telegram/v1/telegramv1connect"
 	"github.com/ysomad/financer/internal/tgbot/config"
+	"github.com/ysomad/financer/internal/tgbot/model"
+	"github.com/ysomad/financer/internal/tgbot/redis"
 )
 
-type Bot struct {
-	conf     config.Config
-	redis    *redis.Client
-	identity connectpb.IdentityServiceClient
-	token    connectpb.AccessTokenServiceClient
+var messages = map[string]string{
+	"internal_error":     "I'm not feeling good right now, try later...",
+	"currency_selection": "Choose from list or send any other currency in ISO-4217 format (for example UAH, KZT, GBP etc):",
+	"currency_set":       "%s saved as your default currency. Next time you send me a command without specifying currency I'll use %s.\n\nYou can always change default currency by using /set_currency command",
+	"canceled":           "Current operation is canceled",
 }
 
-const msgInternal = "Чет я поднаебнулся, попробуй позже..."
+type IdentityService struct {
+	Client connectpb.IdentityServiceClient
+	Cache  redis.IdentityCache
+}
+
+type Bot struct {
+	conf        config.Config
+	redis       *goredis.Client
+	identity    IdentityService
+	accessToken connectpb.AccessTokenServiceClient
+	state       redis.StateCache
+}
 
 var cacheTTL = time.Minute * 5
 
-func New(conf config.Config, r *redis.Client, id connectpb.IdentityServiceClient, t connectpb.AccessTokenServiceClient) *Bot {
-	return &Bot{conf: conf, identity: id, token: t, redis: r}
+func New(
+	conf config.Config,
+	rdb *goredis.Client,
+	id IdentityService,
+	accessToken connectpb.AccessTokenServiceClient,
+	state redis.StateCache,
+) *Bot {
+	return &Bot{
+		conf:        conf,
+		identity:    id,
+		accessToken: accessToken,
+		redis:       rdb,
+		state:       state,
+	}
 }
 
 func accessTokenKey(tgUID int64) string {
 	return fmt.Sprintf("access_token:%d", tgUID)
 }
 
-func (b *Bot) HandleStart(c telebot.Context) error {
-	tgUID := c.Chat().ID
-	ctx := context.Background()
-
-	// get access token from cache
-	accessToken := b.redis.Get(ctx, accessTokenKey(tgUID)).Val()
-	if accessToken != "" {
-		return c.Send(accessToken)
-	}
-
-	// issue access token and set to cache
-	if _, err := b.getOrCreateIdentity(ctx, tgUID); err != nil {
-		slog.Error("identity not found nor created", "err", err.Error())
-		return c.Send(msgInternal)
-	}
-
-	req := newServerRequest(&pb.IssueAccessTokenRequest{TgUid: tgUID}, b.conf.Server.APIKey)
-
-	resp, err := b.token.IssueAccessToken(ctx, req)
-	if err != nil {
-		slog.Error("access token not issued", "err", err.Error())
-		return c.Send(msgInternal)
-	}
-
-	if err := b.redis.Set(ctx, accessTokenKey(tgUID), resp.Msg.AccessToken, cacheTTL).Err(); err != nil {
-		slog.Error("access key not saved to cache")
-		return nil
+func (b *Bot) Start(c telebot.Context) error {
+	if _, err := b.authorize(context.Background(), c.Chat().ID); err != nil {
+		slog.Error("/start not authorized", "err", err)
+		return c.Send(messages["internal_error"])
 	}
 
 	/* send user instruction with menu
 	   - /add {amount money} {?iso 4217 currency} {comment} {date in format 20.05 or 20.05.1999} - adds expense
 	*/
 
-	return c.Send(resp.Msg.AccessToken)
+	return nil
 }
 
-func (b *Bot) getOrCreateIdentity(ctx context.Context, tgUID int64) (*pb.Identity, error) {
-	req := newServerRequest(&pb.GetIdentityByTelegramUIDRequest{TgUid: tgUID}, b.conf.Server.APIKey)
+func (b *Bot) CmdSetCurrency(c telebot.Context) error {
+	tguid := c.Chat().ID
 
-	// found
-	resp, err := b.identity.GetIdentityByTelegramUID(ctx, req)
+	// TODO: with timeout
+	ctx := context.Background()
+
+	_, err := b.authorize(ctx, tguid)
+	if err != nil {
+		slog.Error("/set_currency not authorized", "err", err)
+		return c.Send(messages["internal_error"])
+	}
+
+	kb := new(telebot.ReplyMarkup)
+
+	btnRUB := kb.Data("🇷🇺 Roubles", "set_currency", "RUB")
+	btnUSD := kb.Data("🇺🇸 Dollars", "set_currency", "USD")
+	btnEUR := kb.Data("🇪🇺 Euros", "set_currency", "EUR")
+	btnCancel := kb.Data("Cancel", "cancel")
+
+	kb.Inline(
+		kb.Row(btnUSD),
+		kb.Row(btnEUR),
+		kb.Row(btnRUB),
+		kb.Row(btnCancel))
+
+	if err := b.state.Save(ctx, tguid, model.StateCurrencySelection); err != nil {
+		slog.Error("state not saved", "err", err.Error())
+		return c.Send(messages["internal_error"])
+	}
+
+	return c.Send(messages["currency_selection"], kb)
+}
+
+func (b *Bot) HandleCallback(c telebot.Context) error {
+	// TODO: with timeout
+	ctx := context.Background()
+	cb := c.Callback()
+	tguid := c.Chat().ID
+	slog.Debug("callback", "data", cb.Data, "unique", cb.Unique)
+
+	cbData := strings.ReplaceAll(cb.Data, "\f", "")
+	cbDataParts := strings.Split(cbData, "|")
+
+	switch len(cbDataParts) {
+	case 1: // callback without data, only unique preset
+		if cbDataParts[0] == "cancel" {
+			if err := b.state.Del(ctx, tguid); err != nil {
+				slog.Error("state not deleted", "err", err.Error())
+			}
+			return c.Edit(messages["canceled"])
+		}
+	case 2: // callback with unique and data
+		if cbDataParts[0] == "set_currency" {
+			currency := cbDataParts[1]
+			return c.Edit(fmt.Sprintf(messages["currency_set"], currency, currency))
+		}
+	default:
+		slog.Error("unsupported callback", "data", cb.Data)
+		return nil
+	}
+
+	return nil
+}
+
+// getOrCreateIdentity gets or creates identity from server.
+func (b *Bot) getOrCreateIdentity(ctx context.Context, tguid int64) (*pb.Identity, error) {
+	resp, err := b.identity.Client.GetIdentityByTelegramUID(ctx, withAPIKey(&pb.GetIdentityByTelegramUIDRequest{
+		TgUid: tguid,
+	}, b.conf.Server.APIKey))
 	if err == nil {
 		return resp.Msg, nil
 	}
 
-	// not found
 	if connectErr := new(connect.Error); errors.As(err, &connectErr) && connectErr.Code() == connect.CodeNotFound {
-		req := newServerRequest(&pb.CreateIdentityRequest{TgUid: tgUID}, b.conf.Server.APIKey)
-
-		res, err := b.identity.CreateIdentity(ctx, req)
+		resp, err := b.identity.Client.CreateIdentity(ctx, withAPIKey(&pb.CreateIdentityRequest{
+			TgUid: tguid,
+		}, b.conf.Server.APIKey))
 		if err != nil {
 			return nil, fmt.Errorf("identity not created: %w", err)
 		}
 
-		return res.Msg, nil
+		return resp.Msg, nil
 	}
 
-	return nil, errors.New("unsupported error type")
+	// server error
+	slog.Error("cannot get identity from server", "err", err.Error())
+
+	return nil, err
 }
 
-func newServerRequest[T any](msg *T, apiKey string) *connect.Request[T] {
+// authorize returns identity from cache or creates it and issues access token.
+func (b *Bot) authorize(ctx context.Context, tguid int64) (model.Identity, error) {
+	// get identity from cache
+	identity, err := b.identity.Cache.Get(ctx, tguid)
+	if err == nil {
+		return identity, nil
+	}
+
+	if !errors.Is(err, redis.ErrNotFound) {
+		slog.Error("cache error getting identity", "err", err.Error())
+	}
+
+	slog.Info("identity not found in cache", "tg_uid", tguid)
+
+	// get pbIdentity from server
+	pbIdentity, err := b.getOrCreateIdentity(ctx, tguid)
+	if err != nil {
+		return model.Identity{}, fmt.Errorf("couldnt get identity from server: %w", err)
+	}
+
+	// issue access token for newly created identity
+	resp, err := b.accessToken.IssueAccessToken(ctx, withAPIKey(&pb.IssueAccessTokenRequest{
+		TgUid: tguid,
+	}, b.conf.Server.APIKey))
+	if err != nil {
+		return model.Identity{}, fmt.Errorf("access token not issued: %w", err)
+	}
+
+	identity = model.Identity{
+		ID:          pbIdentity.Id,
+		TGUID:       pbIdentity.TgUid,
+		AccessToken: resp.Msg.AccessToken,
+		Currency:    pbIdentity.Currency,
+	}
+
+	if err := b.identity.Cache.Save(ctx, identity); err != nil {
+		slog.Error("identity not saved to cache", "err", err.Error())
+	}
+
+	return identity, nil
+}
+
+func withAPIKey[T any](msg *T, apiKey string) *connect.Request[T] {
 	r := connect.NewRequest(msg)
 	r.Header().Set("X-API-KEY", apiKey)
 	return r

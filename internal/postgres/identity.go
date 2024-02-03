@@ -26,19 +26,19 @@ func NewIdentityStorage(c *pgclient.Client) *IdentityStorage {
 var ErrIdentityNotFound = errors.New("identity not found")
 
 type Identity struct {
-	ID              string             `db:"id"`
-	CreatedAt       time.Time          `db:"created_at"`
-	UpdatedAt       pgtype.Timestamptz `db:"updated_at"`
-	DeletedAt       pgtype.Timestamptz `db:"deleted_at"`
-	TelegramUID     pgtype.Int8        `db:"telegram_uid"`
-	DefaultCurrency string             `db:"default_currency"`
+	ID          string             `db:"id"`
+	CreatedAt   time.Time          `db:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `db:"updated_at"`
+	DeletedAt   pgtype.Timestamptz `db:"deleted_at"`
+	TelegramUID pgtype.Int8        `db:"telegram_uid"`
+	Currency    string             `db:"currency"`
 }
 
 type InsertIdentityIn struct {
-	ID              string
-	CreatedAt       time.Time
-	TelegramUID     int64
-	DefaultCurrency string
+	ID          string
+	CreatedAt   time.Time
+	TelegramUID int64
+	Currency    string
 }
 
 func (s *IdentityStorage) Insert(ctx context.Context, in InsertIdentityIn) error {
@@ -53,8 +53,8 @@ func (s *IdentityStorage) Insert(ctx context.Context, in InsertIdentityIn) error
 
 	sql2, args2, err := s.Builder.
 		Insert("identity_traits").
-		Columns("telegram_uid, identity_id, default_currency").
-		Values(in.TelegramUID, in.ID, in.DefaultCurrency).
+		Columns("telegram_uid, identity_id, currency").
+		Values(in.TelegramUID, in.ID, in.Currency).
 		ToSql()
 	if err != nil {
 		return err
@@ -100,7 +100,7 @@ func (s *IdentityStorage) FindByTelegramUID(ctx context.Context, uid int64) (Ide
 			"i.created_at created_at",
 			"i.updated_at updated_at",
 			"i.deleted_at deleted_at",
-			"t.default_currency default_currency",
+			"t.currency currency",
 			"t.telegram_uid telegram_uid").
 		From("identity_traits t").
 		InnerJoin("identities i on t.identity_id = i.id").
