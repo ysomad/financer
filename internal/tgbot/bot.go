@@ -13,11 +13,11 @@ import (
 	"github.com/redis/go-redis/v9"
 	pb "github.com/ysomad/financer/internal/gen/proto/telegram/v1"
 	connectpb "github.com/ysomad/financer/internal/gen/proto/telegram/v1/telegramv1connect"
-	"github.com/ysomad/financer/internal/tgbotconf"
+	"github.com/ysomad/financer/internal/tgbot/config"
 )
 
 type Bot struct {
-	conf     tgbotconf.Config
+	conf     config.Config
 	redis    *redis.Client
 	identity connectpb.IdentityServiceClient
 	token    connectpb.AccessTokenServiceClient
@@ -27,21 +27,29 @@ const msgInternal = "Чет я поднаебнулся, попробуй поз
 
 var cacheTTL = time.Minute * 5
 
-func New(conf tgbotconf.Config, r *redis.Client, id connectpb.IdentityServiceClient, t connectpb.AccessTokenServiceClient) *Bot {
+func New(conf config.Config, r *redis.Client, id connectpb.IdentityServiceClient, t connectpb.AccessTokenServiceClient) *Bot {
 	return &Bot{conf: conf, identity: id, token: t, redis: r}
+}
+
+func accessTokenKey(tgUID int64) string {
+	return fmt.Sprintf("access_token:%d", tgUID)
 }
 
 func (b *Bot) HandleStart(c telebot.Context) error {
 	tgUID := c.Chat().ID
 	ctx := context.Background()
 
-	identity, err := b.getOrCreateIdentity(ctx, tgUID)
-	if err != nil {
-		slog.Error("identity not found or not created", "err", err.Error())
-		return c.Send(msgInternal)
+	// get access token from cache
+	accessToken := b.redis.Get(ctx, accessTokenKey(tgUID)).Val()
+	if accessToken != "" {
+		return c.Send(accessToken)
 	}
 
-	c.Send(identity)
+	// issue access token and set to cache
+	if _, err := b.getOrCreateIdentity(ctx, tgUID); err != nil {
+		slog.Error("identity not found nor created", "err", err.Error())
+		return c.Send(msgInternal)
+	}
 
 	req := newServerRequest(&pb.IssueAccessTokenRequest{TgUid: tgUID}, b.conf.Server.APIKey)
 
@@ -51,10 +59,14 @@ func (b *Bot) HandleStart(c telebot.Context) error {
 		return c.Send(msgInternal)
 	}
 
-	if err := b.redis.Set(ctx, fmt.Sprintf("access_token:%d", tgUID), resp.Msg.AccessToken, cacheTTL).Err(); err != nil {
+	if err := b.redis.Set(ctx, accessTokenKey(tgUID), resp.Msg.AccessToken, cacheTTL).Err(); err != nil {
 		slog.Error("access key not saved to cache")
 		return nil
 	}
+
+	/* send user instruction with menu
+	   - /add {amount money} {?iso 4217 currency} {comment} {date in format 20.05 or 20.05.1999} - adds expense
+	*/
 
 	return c.Send(resp.Msg.AccessToken)
 }

@@ -1,8 +1,6 @@
-package tgbotconf
+package config
 
 import (
-	"log/slog"
-	"strings"
 	"time"
 )
 
@@ -25,17 +23,4 @@ type Redis struct {
 	ReadTimeout  time.Duration `toml:"read_timeout" env-required:"true"`
 	WriteTimeout time.Duration `toml:"write_timeout" env-required:"true"`
 	PoolSize     int           `toml:"pool_size" env-required:"true"`
-}
-
-func (c *Config) SlogLogLevel() slog.Level {
-	switch strings.ToLower(c.LogLevel) {
-	case "debug":
-		return slog.LevelDebug
-	case "warn", "warning":
-		return slog.LevelWarn
-	case "error", "err":
-		return slog.LevelError
-	default:
-		return slog.LevelInfo
-	}
 }

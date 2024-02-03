@@ -17,18 +17,18 @@ import (
 	"github.com/ysomad/financer/internal/gen/proto/telegram/v1/telegramv1connect"
 	"github.com/ysomad/financer/internal/slogx"
 	"github.com/ysomad/financer/internal/tgbot"
-	"github.com/ysomad/financer/internal/tgbotconf"
+	"github.com/ysomad/financer/internal/tgbot/config"
 )
 
 func main() {
-	var conf tgbotconf.Config
+	var conf config.Config
 
 	if err := cleanenv.ReadConfig("configs/tgbot_local.toml", &conf); err != nil {
 		log.Fatalf("config parse error: %s", err)
 	}
 
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
-		Level: conf.SlogLogLevel(),
+		Level: slogx.ParseLevel(conf.LogLevel),
 	})))
 
 	slog.Debug("loaded config", "conf", conf)

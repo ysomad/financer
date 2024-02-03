@@ -22,7 +22,7 @@ import (
 	"github.com/ysomad/financer/internal/postgres/pgclient"
 	"github.com/ysomad/financer/internal/rpc"
 	v1 "github.com/ysomad/financer/internal/rpc/telegram/v1"
-	"github.com/ysomad/financer/internal/serverconf"
+	"github.com/ysomad/financer/internal/server/config"
 	"github.com/ysomad/financer/internal/slogx"
 )
 
@@ -38,14 +38,14 @@ func main() {
 	flag.StringVar(&configPath, "conf", "./configs/server_local.toml", "path to app config")
 	flag.Parse()
 
-	var conf serverconf.Config
+	var conf config.Config
 
 	if err := cleanenv.ReadConfig(configPath, &conf); err != nil {
 		log.Fatalf("config parse error: %s", err)
 	}
 
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
-		Level: conf.SlogLogLevel(),
+		Level: slogx.ParseLevel(conf.LogLevel),
 	})))
 
 	slog.Debug("loaded config", "conf", conf)
@@ -79,7 +79,7 @@ func main() {
 	mux.Handle(path, handler)
 
 	// access token service
-	tokensrv := v1.NewTokenServer(identityStorage, conf.AccessToken)
+	tokensrv := v1.NewAccessTokenServer(identityStorage, conf.AccessToken)
 	path, handler = telegramv1connect.NewAccessTokenServiceHandler(tokensrv,
 		connect.WithInterceptors(validateInterceptor, tgInterceptor))
 	mux.Handle(path, handler)

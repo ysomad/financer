@@ -1,8 +1,6 @@
-package serverconf
+package config
 
 import (
-	"log/slog"
-	"strings"
 	"time"
 )
 
@@ -20,17 +18,4 @@ type Config struct {
 type AccessToken struct {
 	SecretKey string        `env:"SERVER_ACCCESS_TOKEN_SECRET" env-required:"true"`
 	TTL       time.Duration `toml:"ttl" env-required:"true"`
-}
-
-func (c *Config) SlogLogLevel() slog.Level {
-	switch strings.ToLower(c.LogLevel) {
-	case "debug":
-		return slog.LevelDebug
-	case "warn", "warning":
-		return slog.LevelWarn
-	case "error", "err":
-		return slog.LevelError
-	default:
-		return slog.LevelInfo
-	}
 }

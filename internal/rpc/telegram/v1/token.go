@@ -2,7 +2,6 @@ package v1
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"connectrpc.com/connect"
@@ -11,23 +10,23 @@ import (
 	pb "github.com/ysomad/financer/internal/gen/proto/telegram/v1"
 	"github.com/ysomad/financer/internal/gen/proto/telegram/v1/telegramv1connect"
 	"github.com/ysomad/financer/internal/postgres"
-	"github.com/ysomad/financer/internal/serverconf"
+	"github.com/ysomad/financer/internal/server/config"
 )
 
-var _ telegramv1connect.AccessTokenServiceHandler = &TokenServer{}
+var _ telegramv1connect.AccessTokenServiceHandler = &AccessTokenServer{}
 
 const AudTelegram = "TG"
 
-type TokenServer struct {
+type AccessTokenServer struct {
 	identity *postgres.IdentityStorage
-	conf     serverconf.AccessToken
+	conf     config.AccessToken
 }
 
-func NewTokenServer(id *postgres.IdentityStorage, conf serverconf.AccessToken) *TokenServer {
-	return &TokenServer{identity: id, conf: conf}
+func NewAccessTokenServer(id *postgres.IdentityStorage, conf config.AccessToken) *AccessTokenServer {
+	return &AccessTokenServer{identity: id, conf: conf}
 }
 
-func (s *TokenServer) IssueAccessToken(ctx context.Context,
+func (s *AccessTokenServer) IssueAccessToken(ctx context.Context,
 	r *connect.Request[pb.IssueAccessTokenRequest],
 ) (*connect.Response[pb.IssueAccessTokenResponse], error) {
 	identity, err := s.identity.FindByTelegramUID(ctx, r.Msg.TgUid)
@@ -47,11 +46,7 @@ func (s *TokenServer) IssueAccessToken(ctx context.Context,
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 
-	resp := connect.NewResponse(&pb.IssueAccessTokenResponse{
+	return connect.NewResponse(&pb.IssueAccessTokenResponse{
 		AccessToken: tokenstr,
-	})
-
-	resp.Header().Set("Authorization", fmt.Sprintf("Bearer %s", tokenstr))
-
-	return resp, nil
+	}), nil
 }
