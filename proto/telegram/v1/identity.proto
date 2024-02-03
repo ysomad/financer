@@ -7,7 +7,8 @@ import "buf/validate/validate.proto";
 
 service IdentityService {
     rpc CreateIdentity (CreateIdentityRequest) returns (Identity);
-    rpc GetIdentityByTelegramUID (GetIdentityByTelegramUIDRequest) returns (Identity);
+    rpc GetIdentity (GetIdentityRequest) returns (Identity);
+    rpc UpdateIdentity (UpdateIdentityRequest) returns (Identity);
 }
 
 message Identity {
@@ -20,6 +21,11 @@ message CreateIdentityRequest {
     int64 tg_uid = 1 [(buf.validate.field).required = true];
 }
 
-message GetIdentityByTelegramUIDRequest {
-    int64 tg_uid = 1;
+message GetIdentityRequest {
+    int64 tg_uid = 1 [(buf.validate.field).required = true];
+}
+
+message UpdateIdentityRequest {
+    string id = 1 [(buf.validate.field).required = true];
+    string currency = 2 [(buf.validate.field).required = true];
 }

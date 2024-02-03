@@ -11,6 +11,7 @@ require (
 	github.com/google/uuid v1.5.0
 	github.com/ilyakaznacheev/cleanenv v1.5.0
 	github.com/jackc/pgx/v5 v5.5.2
+	github.com/ladydascalie/currency v1.6.0
 	github.com/pressly/goose/v3 v3.18.0
 	github.com/redis/go-redis/v9 v9.4.0
 	google.golang.org/genproto v0.0.0-20240125205218-1f4bbc51befe

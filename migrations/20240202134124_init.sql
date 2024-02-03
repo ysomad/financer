@@ -10,7 +10,8 @@ CREATE TABLE IF NOT EXISTS identities (
 CREATE TABLE IF NOT EXISTS identity_traits (
     identity_id varchar(64) NOT NULL UNIQUE REFERENCES identities (id),
     currency char(3) NOT NULL,
-    telegram_uid bigint UNIQUE
+    telegram_uid bigint UNIQUE,
+    updated_at timestamptz
 );
 
 CREATE TYPE category_type AS ENUM ('Expenses', 'Earnings');

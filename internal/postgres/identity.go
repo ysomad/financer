@@ -94,7 +94,7 @@ func (s *IdentityStorage) Insert(ctx context.Context, in InsertIdentityIn) error
 	return nil
 }
 
-func (s *IdentityStorage) FindByTelegramUID(ctx context.Context, uid int64) (Identity, error) {
+func (s *IdentityStorage) FindByTelegramUID(ctx context.Context, tguid int64) (Identity, error) {
 	sql, args, err := s.Builder.
 		Select("i.id id",
 			"i.created_at created_at",
@@ -104,7 +104,7 @@ func (s *IdentityStorage) FindByTelegramUID(ctx context.Context, uid int64) (Ide
 			"t.telegram_uid telegram_uid").
 		From("identity_traits t").
 		InnerJoin("identities i on t.identity_id = i.id").
-		Where(sq.Eq{"telegram_uid": uid}).ToSql()
+		Where(sq.Eq{"telegram_uid": tguid}).ToSql()
 	if err != nil {
 		return Identity{}, err
 	}
@@ -124,4 +124,60 @@ func (s *IdentityStorage) FindByTelegramUID(ctx context.Context, uid int64) (Ide
 	}
 
 	return id, nil
+}
+
+func (s *IdentityStorage) Get(ctx context.Context, identityID string) (Identity, error) {
+	sql, args, err := s.Builder.
+		Select("i.id id",
+			"i.created_at created_at",
+			"i.updated_at updated_at",
+			"i.deleted_at deleted_at",
+			"t.currency currency",
+			"t.telegram_uid telegram_uid").
+		From("identity_traits t").
+		InnerJoin("identities i on t.identity_id = i.id").
+		Where(sq.Eq{"i.id": identityID}).ToSql()
+	if err != nil {
+		return Identity{}, err
+	}
+
+	rows, err := s.Pool.Query(ctx, sql, args...)
+	if err != nil {
+		return Identity{}, fmt.Errorf("error fetching identity: %w", err)
+	}
+
+	id, err := pgx.CollectOneRow(rows, pgx.RowToStructByName[Identity])
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return Identity{}, ErrIdentityNotFound
+		}
+
+		return Identity{}, fmt.Errorf("error getting result from row: %w", err)
+	}
+
+	return id, nil
+}
+
+type UpdateIdentityIn struct {
+	IdentityID string
+	Currency   string
+	UpdatedAt  time.Time
+}
+
+func (s *IdentityStorage) Update(ctx context.Context, in UpdateIdentityIn) error {
+	sql, args, err := s.Builder.
+		Update("identity_traits").
+		Set("currency", in.Currency).
+		Set("updated_at", in.UpdatedAt).
+		Where(sq.Eq{"identity_id": in.IdentityID}).
+		ToSql()
+	if err != nil {
+		return nil
+	}
+
+	if _, err := s.Pool.Exec(ctx, sql, args...); err != nil {
+		return fmt.Errorf("update query not executed: %w", err)
+	}
+
+	return nil
 }

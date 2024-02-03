@@ -8,7 +8,6 @@ type Identity struct {
 	ID          string
 	TGUID       int64
 	AccessToken string
-	Currency    string
 }
 
 func (id Identity) Validate() error {
@@ -20,9 +19,6 @@ func (id Identity) Validate() error {
 	}
 	if id.AccessToken == "" {
 		return errors.New("access token is required")
-	}
-	if id.Currency == "" {
-		return errors.New("currency is required")
 	}
 	return nil
 }

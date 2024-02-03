@@ -36,15 +36,19 @@ const (
 	// IdentityServiceCreateIdentityProcedure is the fully-qualified name of the IdentityService's
 	// CreateIdentity RPC.
 	IdentityServiceCreateIdentityProcedure = "/telegram.v1.IdentityService/CreateIdentity"
-	// IdentityServiceGetIdentityByTelegramUIDProcedure is the fully-qualified name of the
-	// IdentityService's GetIdentityByTelegramUID RPC.
-	IdentityServiceGetIdentityByTelegramUIDProcedure = "/telegram.v1.IdentityService/GetIdentityByTelegramUID"
+	// IdentityServiceGetIdentityProcedure is the fully-qualified name of the IdentityService's
+	// GetIdentity RPC.
+	IdentityServiceGetIdentityProcedure = "/telegram.v1.IdentityService/GetIdentity"
+	// IdentityServiceUpdateIdentityProcedure is the fully-qualified name of the IdentityService's
+	// UpdateIdentity RPC.
+	IdentityServiceUpdateIdentityProcedure = "/telegram.v1.IdentityService/UpdateIdentity"
 )
 
 // IdentityServiceClient is a client for the telegram.v1.IdentityService service.
 type IdentityServiceClient interface {
 	CreateIdentity(context.Context, *connect.Request[v1.CreateIdentityRequest]) (*connect.Response[v1.Identity], error)
-	GetIdentityByTelegramUID(context.Context, *connect.Request[v1.GetIdentityByTelegramUIDRequest]) (*connect.Response[v1.Identity], error)
+	GetIdentity(context.Context, *connect.Request[v1.GetIdentityRequest]) (*connect.Response[v1.Identity], error)
+	UpdateIdentity(context.Context, *connect.Request[v1.UpdateIdentityRequest]) (*connect.Response[v1.Identity], error)
 }
 
 // NewIdentityServiceClient constructs a client for the telegram.v1.IdentityService service. By
@@ -62,9 +66,14 @@ func NewIdentityServiceClient(httpClient connect.HTTPClient, baseURL string, opt
 			baseURL+IdentityServiceCreateIdentityProcedure,
 			opts...,
 		),
-		getIdentityByTelegramUID: connect.NewClient[v1.GetIdentityByTelegramUIDRequest, v1.Identity](
+		getIdentity: connect.NewClient[v1.GetIdentityRequest, v1.Identity](
 			httpClient,
-			baseURL+IdentityServiceGetIdentityByTelegramUIDProcedure,
+			baseURL+IdentityServiceGetIdentityProcedure,
+			opts...,
+		),
+		updateIdentity: connect.NewClient[v1.UpdateIdentityRequest, v1.Identity](
+			httpClient,
+			baseURL+IdentityServiceUpdateIdentityProcedure,
 			opts...,
 		),
 	}
@@ -72,8 +81,9 @@ func NewIdentityServiceClient(httpClient connect.HTTPClient, baseURL string, opt
 
 // identityServiceClient implements IdentityServiceClient.
 type identityServiceClient struct {
-	createIdentity           *connect.Client[v1.CreateIdentityRequest, v1.Identity]
-	getIdentityByTelegramUID *connect.Client[v1.GetIdentityByTelegramUIDRequest, v1.Identity]
+	createIdentity *connect.Client[v1.CreateIdentityRequest, v1.Identity]
+	getIdentity    *connect.Client[v1.GetIdentityRequest, v1.Identity]
+	updateIdentity *connect.Client[v1.UpdateIdentityRequest, v1.Identity]
 }
 
 // CreateIdentity calls telegram.v1.IdentityService.CreateIdentity.
@@ -81,15 +91,21 @@ func (c *identityServiceClient) CreateIdentity(ctx context.Context, req *connect
 	return c.createIdentity.CallUnary(ctx, req)
 }
 
-// GetIdentityByTelegramUID calls telegram.v1.IdentityService.GetIdentityByTelegramUID.
-func (c *identityServiceClient) GetIdentityByTelegramUID(ctx context.Context, req *connect.Request[v1.GetIdentityByTelegramUIDRequest]) (*connect.Response[v1.Identity], error) {
-	return c.getIdentityByTelegramUID.CallUnary(ctx, req)
+// GetIdentity calls telegram.v1.IdentityService.GetIdentity.
+func (c *identityServiceClient) GetIdentity(ctx context.Context, req *connect.Request[v1.GetIdentityRequest]) (*connect.Response[v1.Identity], error) {
+	return c.getIdentity.CallUnary(ctx, req)
+}
+
+// UpdateIdentity calls telegram.v1.IdentityService.UpdateIdentity.
+func (c *identityServiceClient) UpdateIdentity(ctx context.Context, req *connect.Request[v1.UpdateIdentityRequest]) (*connect.Response[v1.Identity], error) {
+	return c.updateIdentity.CallUnary(ctx, req)
 }
 
 // IdentityServiceHandler is an implementation of the telegram.v1.IdentityService service.
 type IdentityServiceHandler interface {
 	CreateIdentity(context.Context, *connect.Request[v1.CreateIdentityRequest]) (*connect.Response[v1.Identity], error)
-	GetIdentityByTelegramUID(context.Context, *connect.Request[v1.GetIdentityByTelegramUIDRequest]) (*connect.Response[v1.Identity], error)
+	GetIdentity(context.Context, *connect.Request[v1.GetIdentityRequest]) (*connect.Response[v1.Identity], error)
+	UpdateIdentity(context.Context, *connect.Request[v1.UpdateIdentityRequest]) (*connect.Response[v1.Identity], error)
 }
 
 // NewIdentityServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -103,17 +119,24 @@ func NewIdentityServiceHandler(svc IdentityServiceHandler, opts ...connect.Handl
 		svc.CreateIdentity,
 		opts...,
 	)
-	identityServiceGetIdentityByTelegramUIDHandler := connect.NewUnaryHandler(
-		IdentityServiceGetIdentityByTelegramUIDProcedure,
-		svc.GetIdentityByTelegramUID,
+	identityServiceGetIdentityHandler := connect.NewUnaryHandler(
+		IdentityServiceGetIdentityProcedure,
+		svc.GetIdentity,
+		opts...,
+	)
+	identityServiceUpdateIdentityHandler := connect.NewUnaryHandler(
+		IdentityServiceUpdateIdentityProcedure,
+		svc.UpdateIdentity,
 		opts...,
 	)
 	return "/telegram.v1.IdentityService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case IdentityServiceCreateIdentityProcedure:
 			identityServiceCreateIdentityHandler.ServeHTTP(w, r)
-		case IdentityServiceGetIdentityByTelegramUIDProcedure:
-			identityServiceGetIdentityByTelegramUIDHandler.ServeHTTP(w, r)
+		case IdentityServiceGetIdentityProcedure:
+			identityServiceGetIdentityHandler.ServeHTTP(w, r)
+		case IdentityServiceUpdateIdentityProcedure:
+			identityServiceUpdateIdentityHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -127,6 +150,10 @@ func (UnimplementedIdentityServiceHandler) CreateIdentity(context.Context, *conn
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("telegram.v1.IdentityService.CreateIdentity is not implemented"))
 }
 
-func (UnimplementedIdentityServiceHandler) GetIdentityByTelegramUID(context.Context, *connect.Request[v1.GetIdentityByTelegramUIDRequest]) (*connect.Response[v1.Identity], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("telegram.v1.IdentityService.GetIdentityByTelegramUID is not implemented"))
+func (UnimplementedIdentityServiceHandler) GetIdentity(context.Context, *connect.Request[v1.GetIdentityRequest]) (*connect.Response[v1.Identity], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("telegram.v1.IdentityService.GetIdentity is not implemented"))
+}
+
+func (UnimplementedIdentityServiceHandler) UpdateIdentity(context.Context, *connect.Request[v1.UpdateIdentityRequest]) (*connect.Response[v1.Identity], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("telegram.v1.IdentityService.UpdateIdentity is not implemented"))
 }

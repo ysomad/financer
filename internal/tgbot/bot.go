@@ -11,6 +11,7 @@ import (
 	"connectrpc.com/connect"
 	"gopkg.in/telebot.v3"
 
+	"github.com/ladydascalie/currency"
 	goredis "github.com/redis/go-redis/v9"
 	pb "github.com/ysomad/financer/internal/gen/proto/telegram/v1"
 	connectpb "github.com/ysomad/financer/internal/gen/proto/telegram/v1/telegramv1connect"
@@ -107,11 +108,39 @@ func (b *Bot) CmdSetCurrency(c telebot.Context) error {
 	return c.Send(messages["currency_selection"], kb)
 }
 
+var errInvalidCurrencyCode = errors.New("currency code must be in iso-4217 format")
+
+// saveCurrency saves new currency to server
+func (b *Bot) saveCurrency(ctx context.Context, tguid int64, currCode string) error {
+	// TODO: test
+	currCode = strings.ToUpper(currCode)
+
+	if !currency.Valid(currCode) {
+		return errInvalidCurrencyCode
+	}
+
+	identity, err := b.identity.Cache.Get(ctx, tguid)
+	if err != nil {
+		return fmt.Errorf("identity not found in cache")
+	}
+
+	if _, err := b.identity.Client.UpdateIdentity(ctx, withAPIKey(&pb.UpdateIdentityRequest{
+		Id:       identity.ID,
+		Currency: currCode,
+	}, b.conf.Server.APIKey)); err != nil {
+		return fmt.Errorf("identity not updated: %w", err)
+	}
+
+	return nil
+}
+
 func (b *Bot) HandleCallback(c telebot.Context) error {
 	// TODO: with timeout
 	ctx := context.Background()
+
 	cb := c.Callback()
 	tguid := c.Chat().ID
+
 	slog.Debug("callback", "data", cb.Data, "unique", cb.Unique)
 
 	cbData := strings.ReplaceAll(cb.Data, "\f", "")
@@ -121,13 +150,24 @@ func (b *Bot) HandleCallback(c telebot.Context) error {
 	case 1: // callback without data, only unique preset
 		if cbDataParts[0] == "cancel" {
 			if err := b.state.Del(ctx, tguid); err != nil {
-				slog.Error("state not deleted", "err", err.Error())
+				slog.Error("state not deleted on cancel", "err", err.Error())
 			}
+
 			return c.Edit(messages["canceled"])
 		}
 	case 2: // callback with unique and data
 		if cbDataParts[0] == "set_currency" {
 			currency := cbDataParts[1]
+
+			if err := b.saveCurrency(ctx, tguid, currency); err != nil {
+				slog.Error("currency not saved", "err", err.Error())
+				return c.Send(messages["internal_error"])
+			}
+
+			if err := b.state.Del(ctx, tguid); err != nil {
+				slog.Error("state not deleted on /set_currency", "err", err.Error())
+			}
+
 			return c.Edit(fmt.Sprintf(messages["currency_set"], currency, currency))
 		}
 	default:
@@ -140,7 +180,7 @@ func (b *Bot) HandleCallback(c telebot.Context) error {
 
 // getOrCreateIdentity gets or creates identity from server.
 func (b *Bot) getOrCreateIdentity(ctx context.Context, tguid int64) (*pb.Identity, error) {
-	resp, err := b.identity.Client.GetIdentityByTelegramUID(ctx, withAPIKey(&pb.GetIdentityByTelegramUIDRequest{
+	resp, err := b.identity.Client.GetIdentity(ctx, withAPIKey(&pb.GetIdentityRequest{
 		TgUid: tguid,
 	}, b.conf.Server.APIKey))
 	if err == nil {
@@ -196,7 +236,6 @@ func (b *Bot) authorize(ctx context.Context, tguid int64) (model.Identity, error
 		ID:          pbIdentity.Id,
 		TGUID:       pbIdentity.TgUid,
 		AccessToken: resp.Msg.AccessToken,
-		Currency:    pbIdentity.Currency,
 	}
 
 	if err := b.identity.Cache.Save(ctx, identity); err != nil {
