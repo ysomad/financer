@@ -93,6 +93,8 @@ func main() {
 	b.Handle("/set_currency", bot.CmdSetCurrency)
 
 	b.Handle(tele.OnCallback, bot.HandleCallback)
+	b.Handle(tele.OnText, bot.HandleText)
+
 	b.Start()
 }
 

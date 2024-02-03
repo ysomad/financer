@@ -3,6 +3,7 @@ package redis
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -37,10 +38,16 @@ func (c IdentityCache) Save(ctx context.Context, id model.Identity) error {
 	return c.client.Set(ctx, identityCacheKey(id.TGUID), bb, c.ttl).Err()
 }
 
+var ErrNotFound = errors.New("entry not found")
+
 func (c IdentityCache) Get(ctx context.Context, tgUID int64) (model.Identity, error) {
 	cmd := c.client.Get(ctx, identityCacheKey(tgUID))
 	if err := cmd.Err(); err != nil {
-		return model.Identity{}, fmt.Errorf("%w:%w", ErrNotFound, err)
+		if errors.Is(err, ErrNotFound) {
+			return model.Identity{}, ErrNotFound
+		}
+
+		return model.Identity{}, fmt.Errorf("redis cmd: %w", err)
 	}
 
 	bb, err := cmd.Bytes()

@@ -19,25 +19,27 @@ func NewStateCache(c *redis.Client, ttl time.Duration) StateCache {
 	return StateCache{client: c, ttl: ttl}
 }
 
-func stateCacheKey(tgUID int64) string {
-	return fmt.Sprintf("state:%d", tgUID)
+func stateCacheKey(tguid int64) string {
+	return fmt.Sprintf("state:%d", tguid)
 }
 
-func (c StateCache) Save(ctx context.Context, tgUID int64, st model.State) error {
-	return c.client.Set(ctx, stateCacheKey(tgUID), string(st), c.ttl).Err()
+func (c StateCache) Save(ctx context.Context, tguid int64, st model.State) error {
+	return c.client.Set(ctx, stateCacheKey(tguid), string(st), c.ttl).Err()
 }
 
-var ErrNotFound = errors.New("entry not found")
-
-func (c StateCache) Get(ctx context.Context, tgUID int64) (model.State, error) {
-	res, err := c.client.Get(ctx, stateCacheKey(tgUID)).Result()
+func (c StateCache) Get(ctx context.Context, tguid int64) (model.State, error) {
+	res, err := c.client.Get(ctx, stateCacheKey(tguid)).Result()
 	if err != nil {
-		return "", fmt.Errorf("%w:%w", ErrNotFound, err)
+		if errors.Is(err, redis.Nil) {
+			return model.StateUnknown, nil
+		}
+
+		return "", err
 	}
 
 	return model.State(res), nil
 }
 
-func (c StateCache) Del(ctx context.Context, tgUID int64) error {
-	return c.client.Del(ctx, stateCacheKey(tgUID)).Err()
+func (c StateCache) Del(ctx context.Context, tguid int64) error {
+	return c.client.Del(ctx, stateCacheKey(tguid)).Err()
 }

@@ -24,6 +24,7 @@ var messages = map[string]string{
 	"internal_error":     "I'm not feeling good right now, try later...",
 	"currency_selection": "Choose from list or send any other currency in ISO-4217 format (for example UAH, KZT, GBP etc):",
 	"currency_set":       "%s saved as your default currency. Next time you send me a command without specifying currency I'll use %s.\n\nYou can always change default currency by using /set_currency command",
+	"invalid_currency":   "Please provide currency code in ISO-4217 format...",
 	"canceled":           "Current operation is canceled",
 }
 
@@ -134,6 +135,43 @@ func (b *Bot) saveCurrency(ctx context.Context, tguid int64, currCode string) er
 	return nil
 }
 
+func msgCurrencySet(currency string) string {
+	currency = strings.ToUpper(currency)
+	return fmt.Sprintf(messages["currency_set"], currency, currency)
+}
+
+func (b *Bot) HandleText(c telebot.Context) error {
+	tguid := c.Chat().ID
+	ctx := context.Background()
+
+	state, err := b.state.Get(ctx, tguid)
+	if err != nil {
+		slog.Error("couldnt get state", "err", err.Error())
+		return c.Send(messages["internal_error"])
+	}
+
+	switch state {
+	case model.StateCurrencySelection:
+		currency := c.Text()
+
+		if err := b.saveCurrency(ctx, tguid, c.Text()); err != nil {
+			if errors.Is(err, errInvalidCurrencyCode) {
+				return c.Send(messages["invalid_currency"])
+			}
+
+			return c.Send(messages["internal_error"])
+		}
+
+		if err := b.state.Del(ctx, tguid); err != nil {
+			slog.Error("state not deleted", "err", err.Error())
+		}
+
+		return c.Send(msgCurrencySet(currency))
+	}
+
+	return nil
+}
+
 func (b *Bot) HandleCallback(c telebot.Context) error {
 	// TODO: with timeout
 	ctx := context.Background()
@@ -168,7 +206,7 @@ func (b *Bot) HandleCallback(c telebot.Context) error {
 				slog.Error("state not deleted on /set_currency", "err", err.Error())
 			}
 
-			return c.Edit(fmt.Sprintf(messages["currency_set"], currency, currency))
+			return c.Edit(msgCurrencySet(currency))
 		}
 	default:
 		slog.Error("unsupported callback", "data", cb.Data)
