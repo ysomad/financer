@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
-	"time"
 
 	"connectrpc.com/connect"
 	"gopkg.in/telebot.v3"
@@ -40,8 +39,6 @@ type Bot struct {
 	accessToken connectpb.AccessTokenServiceClient
 	state       redis.StateCache
 }
-
-var cacheTTL = time.Minute * 5
 
 func New(
 	conf config.Config,
@@ -90,15 +87,15 @@ func (b *Bot) CmdSetCurrency(c telebot.Context) error {
 
 	kb := new(telebot.ReplyMarkup)
 
-	btnRUB := kb.Data("🇷🇺 Roubles", "set_currency", "RUB")
+	btnRUB := kb.Data("🇷🇺 Rubles", "set_currency", "RUB")
 	btnUSD := kb.Data("🇺🇸 Dollars", "set_currency", "USD")
 	btnEUR := kb.Data("🇪🇺 Euros", "set_currency", "EUR")
 	btnCancel := kb.Data("Cancel", "cancel")
 
 	kb.Inline(
 		kb.Row(btnUSD),
-		kb.Row(btnEUR),
 		kb.Row(btnRUB),
+		kb.Row(btnEUR),
 		kb.Row(btnCancel))
 
 	if err := b.state.Save(ctx, tguid, model.StateCurrencySelection); err != nil {
