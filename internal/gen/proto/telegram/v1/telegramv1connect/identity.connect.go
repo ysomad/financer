@@ -18,7 +18,7 @@ import (
 // generated with a version of connect newer than the one compiled into your binary. You can fix the
 // problem by either regenerating this code with an older version of connect or updating the connect
 // version compiled into your binary.
-const _ = connect.IsAtLeastVersion0_1_0
+const _ = connect.IsAtLeastVersion1_7_0
 
 const (
 	// IdentityServiceName is the fully-qualified name of the IdentityService service.
@@ -69,7 +69,8 @@ func NewIdentityServiceClient(httpClient connect.HTTPClient, baseURL string, opt
 		getIdentity: connect.NewClient[v1.GetIdentityRequest, v1.Identity](
 			httpClient,
 			baseURL+IdentityServiceGetIdentityProcedure,
-			opts...,
+			connect.WithIdempotency(connect.IdempotencyNoSideEffects),
+			connect.WithClientOptions(opts...),
 		),
 		updateIdentity: connect.NewClient[v1.UpdateIdentityRequest, v1.Identity](
 			httpClient,
@@ -122,7 +123,8 @@ func NewIdentityServiceHandler(svc IdentityServiceHandler, opts ...connect.Handl
 	identityServiceGetIdentityHandler := connect.NewUnaryHandler(
 		IdentityServiceGetIdentityProcedure,
 		svc.GetIdentity,
-		opts...,
+		connect.WithIdempotency(connect.IdempotencyNoSideEffects),
+		connect.WithHandlerOptions(opts...),
 	)
 	identityServiceUpdateIdentityHandler := connect.NewUnaryHandler(
 		IdentityServiceUpdateIdentityProcedure,

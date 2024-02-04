@@ -12,8 +12,10 @@ import (
 
 	"github.com/ladydascalie/currency"
 	goredis "github.com/redis/go-redis/v9"
+	expensev1 "github.com/ysomad/financer/internal/gen/proto/expense/v1"
+	"github.com/ysomad/financer/internal/gen/proto/expense/v1/expensev1connect"
 	pb "github.com/ysomad/financer/internal/gen/proto/telegram/v1"
-	connectpb "github.com/ysomad/financer/internal/gen/proto/telegram/v1/telegramv1connect"
+	"github.com/ysomad/financer/internal/gen/proto/telegram/v1/telegramv1connect"
 	"github.com/ysomad/financer/internal/tgbot/config"
 	"github.com/ysomad/financer/internal/tgbot/model"
 	"github.com/ysomad/financer/internal/tgbot/redis"
@@ -28,7 +30,7 @@ var messages = map[string]string{
 }
 
 type IdentityService struct {
-	Client connectpb.IdentityServiceClient
+	Client telegramv1connect.IdentityServiceClient
 	Cache  redis.IdentityCache
 }
 
@@ -36,7 +38,8 @@ type Bot struct {
 	conf        config.Config
 	redis       *goredis.Client
 	identity    IdentityService
-	accessToken connectpb.AccessTokenServiceClient
+	accessToken telegramv1connect.AccessTokenServiceClient
+	category    expensev1connect.CategoryServiceClient
 	state       redis.StateCache
 }
 
@@ -44,13 +47,15 @@ func New(
 	conf config.Config,
 	rdb *goredis.Client,
 	id IdentityService,
-	accessToken connectpb.AccessTokenServiceClient,
+	accessToken telegramv1connect.AccessTokenServiceClient,
+	category expensev1connect.CategoryServiceClient,
 	state redis.StateCache,
 ) *Bot {
 	return &Bot{
 		conf:        conf,
 		identity:    id,
 		accessToken: accessToken,
+		category:    category,
 		redis:       rdb,
 		state:       state,
 	}
@@ -71,6 +76,57 @@ func (b *Bot) Start(c telebot.Context) error {
 	*/
 
 	return nil
+}
+
+func (b *Bot) CmdCategories(c telebot.Context) error {
+	tguid := c.Chat().ID
+	ctx := context.Background()
+
+	identity, err := b.authorize(ctx, tguid)
+	if err != nil {
+		slog.Error("/categories not authorized", "err", err)
+		return c.Send(messages["internal_error"])
+	}
+
+	resp, err := b.category.ListCategories(ctx, withAccessToken(&expensev1.ListCategoriesRequest{
+		PageSize: 50,
+	}, identity.AccessToken))
+	if err != nil {
+		slog.Error("categories not listed", "err", err.Error())
+		return c.Send(err.Error())
+	}
+
+	sb := strings.Builder{}
+	sb.Grow(len(resp.Msg.Categories) + 2)
+	sb.WriteString("➖ Expenses:\n\n")
+
+	// Expenses
+	for _, cat := range resp.Msg.Categories {
+		if cat.Type != 1 { // TODO: refactor
+			continue
+		}
+
+		if _, err := sb.WriteString(cat.Name + "\n"); err != nil {
+			slog.Error("category not writed to builder", "err", err.Error())
+			return c.Send(messages["internal_error"])
+		}
+	}
+
+	sb.WriteString("\n➕ Earnings:\n\n")
+
+	// Earnings
+	for _, cat := range resp.Msg.Categories {
+		if cat.Type != 2 { // TODO: refactor
+			continue
+		}
+
+		if _, err := sb.WriteString(cat.Name + "\n"); err != nil {
+			slog.Error("category not writed to builder", "err", err.Error())
+			return c.Send(messages["internal_error"])
+		}
+	}
+
+	return c.Send(sb.String())
 }
 
 func (b *Bot) CmdSetCurrency(c telebot.Context) error {
@@ -283,5 +339,12 @@ func (b *Bot) authorize(ctx context.Context, tguid int64) (model.Identity, error
 func withAPIKey[T any](msg *T, apiKey string) *connect.Request[T] {
 	r := connect.NewRequest(msg)
 	r.Header().Set("X-API-KEY", apiKey)
+	return r
+}
+
+func withAccessToken[T any](msg *T, accessToken string) *connect.Request[T] {
+	r := connect.NewRequest(msg)
+	// TODO: move to httponly secure cookie
+	r.Header().Set("Authorization", fmt.Sprintf("Bearer %s", accessToken))
 	return r
 }

@@ -16,12 +16,14 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib" // for goose running migrations via pgx
 	"github.com/pressly/goose/v3"
 
+	"github.com/ysomad/financer/internal/gen/proto/expense/v1/expensev1connect"
 	"github.com/ysomad/financer/internal/gen/proto/telegram/v1/telegramv1connect"
 	"github.com/ysomad/financer/internal/httpserver"
 	"github.com/ysomad/financer/internal/postgres"
 	"github.com/ysomad/financer/internal/postgres/pgclient"
 	"github.com/ysomad/financer/internal/rpc"
-	v1 "github.com/ysomad/financer/internal/rpc/telegram/v1"
+	categoryv1 "github.com/ysomad/financer/internal/rpc/expense/v1"
+	tgv1 "github.com/ysomad/financer/internal/rpc/telegram/v1"
 	"github.com/ysomad/financer/internal/server/config"
 	"github.com/ysomad/financer/internal/slogx"
 )
@@ -61,8 +63,9 @@ func main() {
 	}
 
 	identityStorage := postgres.NewIdentityStorage(pgclient)
+	categoryStorage := postgres.NewCategoryStorage(pgclient)
 
-	// connect
+	// interceptors
 	validateInterceptor, err := validate.NewInterceptor()
 	if err != nil {
 		slogx.Fatal("validate interceptor not created", err)
@@ -70,18 +73,31 @@ func main() {
 
 	tgInterceptor := rpc.NewAPIKeyInterceptor(conf.APIKey)
 
+	accessTokenInterceptor := rpc.NewAccessTokenInterceptor(conf.AccessToken.SecretKey)
+
+	// connect
+
 	mux := http.NewServeMux()
 
 	// identity service
-	identitysrv := v1.NewIdentityServer(identityStorage)
-	path, handler := telegramv1connect.NewIdentityServiceHandler(identitysrv,
+	identitysrv := tgv1.NewIdentityServer(identityStorage)
+	path, handler := telegramv1connect.NewIdentityServiceHandler(
+		identitysrv,
 		connect.WithInterceptors(validateInterceptor, tgInterceptor))
 	mux.Handle(path, handler)
 
 	// access token service
-	tokensrv := v1.NewAccessTokenServer(identityStorage, conf.AccessToken)
-	path, handler = telegramv1connect.NewAccessTokenServiceHandler(tokensrv,
+	tokensrv := tgv1.NewAccessTokenServer(identityStorage, conf.AccessToken)
+	path, handler = telegramv1connect.NewAccessTokenServiceHandler(
+		tokensrv,
 		connect.WithInterceptors(validateInterceptor, tgInterceptor))
+	mux.Handle(path, handler)
+
+	// category service
+	categorysrv := categoryv1.NewCategoryServer(categoryStorage)
+	path, handler = expensev1connect.NewCategoryServiceHandler(
+		categorysrv,
+		connect.WithInterceptors(validateInterceptor, accessTokenInterceptor))
 	mux.Handle(path, handler)
 
 	srv := httpserver.New(mux, httpserver.WithAddr("0.0.0.0", conf.Port))

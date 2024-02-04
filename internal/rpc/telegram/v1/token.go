@@ -37,7 +37,7 @@ func (s *AccessTokenServer) IssueAccessToken(ctx context.Context,
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"aud":    AudTelegram,
 		"sub":    identity.ID,
-		"tg_sub": identity.TelegramUID,
+		"tg_sub": identity.TelegramUID.Int64,
 		"exp":    time.Now().Add(s.conf.TTL).Unix(),
 	})
 

@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS identity_traits (
     updated_at timestamptz
 );
 
-CREATE TYPE category_type AS ENUM ('Expenses', 'Earnings');
+CREATE TYPE category_type AS ENUM ('EXPENSES', 'EARNINGS');
 
 CREATE TABLE IF NOT EXISTS categories (
     name varchar(64) PRIMARY KEY NOT NULL,
@@ -24,29 +24,29 @@ CREATE TABLE IF NOT EXISTS categories (
 );
 
 INSERT INTO categories(name, type, created_at) VALUES
-    ('🛏️Rent', 'Expenses', CURRENT_TIMESTAMP),
-    ('💡Public utilities', 'Expenses', CURRENT_TIMESTAMP),
-    ('🌐Telecommunications', 'Expenses', CURRENT_TIMESTAMP),
-    ('💪Sport', 'Expenses', CURRENT_TIMESTAMP),
-    ('🍏Groceries', 'Expenses', CURRENT_TIMESTAMP),
-    ('🕯️Home', 'Expenses', CURRENT_TIMESTAMP),
-    ('🍕Food service', 'Expenses', CURRENT_TIMESTAMP),
-    ('🎮Entertainment', 'Expenses', CURRENT_TIMESTAMP),
-    ('🏥Healthcare', 'Expenses', CURRENT_TIMESTAMP),
-    ('💊Pharmacy', 'Expenses', CURRENT_TIMESTAMP),
-    ('🛀Selfcare', 'Expenses', CURRENT_TIMESTAMP),
-    ('💻Electronics', 'Expenses', CURRENT_TIMESTAMP),
-    ('🛍️Shopping', 'Expenses', CURRENT_TIMESTAMP),
-    ('✈️Trips', 'Expenses', CURRENT_TIMESTAMP),
-    ('🚌Public transport', 'Expenses', CURRENT_TIMESTAMP),
-    ('🚕Taxi', 'Expenses', CURRENT_TIMESTAMP),
-    ('🎁Gifts', 'Expenses', CURRENT_TIMESTAMP),
-    ('📚Education', 'Expenses', CURRENT_TIMESTAMP),
-    ('📧Online services', 'Expenses', CURRENT_TIMESTAMP),
-    ('🏛️Taxes', 'Expenses', CURRENT_TIMESTAMP),
-    ('🤷Other', 'Expenses', CURRENT_TIMESTAMP),
-    ('💳Salary', 'Earnings', CURRENT_TIMESTAMP),
-    ('💰Bonuses', 'Earnings', CURRENT_TIMESTAMP);
+    ('🛏️ Rent', 'EXPENSES', CURRENT_TIMESTAMP),
+    ('💡 Public utilities', 'EXPENSES', CURRENT_TIMESTAMP),
+    ('📱 Mobile and internet', 'EXPENSES', CURRENT_TIMESTAMP),
+    ('💪 Sport', 'EXPENSES', CURRENT_TIMESTAMP),
+    ('🍏 Groceries', 'EXPENSES', CURRENT_TIMESTAMP),
+    ('🕯️ Home', 'EXPENSES', CURRENT_TIMESTAMP),
+    ('🍕 Food service', 'EXPENSES', CURRENT_TIMESTAMP),
+    ('🎮 Entertainment', 'EXPENSES', CURRENT_TIMESTAMP),
+    ('🏥 Healthcare', 'EXPENSES', CURRENT_TIMESTAMP),
+    ('💊 Pharmacy', 'EXPENSES', CURRENT_TIMESTAMP),
+    ('🛀 Selfcare', 'EXPENSES', CURRENT_TIMESTAMP),
+    ('💻 Electronics', 'EXPENSES', CURRENT_TIMESTAMP),
+    ('🛍️ Shopping', 'EXPENSES', CURRENT_TIMESTAMP),
+    ('✈️ Trips', 'EXPENSES', CURRENT_TIMESTAMP),
+    ('🚌 Public transport', 'EXPENSES', CURRENT_TIMESTAMP),
+    ('🚕 Taxi', 'EXPENSES', CURRENT_TIMESTAMP),
+    ('🎁 Gifts', 'EXPENSES', CURRENT_TIMESTAMP),
+    ('📚 Education', 'EXPENSES', CURRENT_TIMESTAMP),
+    ('📧 Online services', 'EXPENSES', CURRENT_TIMESTAMP),
+    ('🏛️ Taxes', 'EXPENSES', CURRENT_TIMESTAMP),
+    ('🤷 Other', 'EXPENSES', CURRENT_TIMESTAMP),
+    ('💳 Salary', 'EARNINGS', CURRENT_TIMESTAMP),
+    ('💰 Bonuses', 'EARNINGS', CURRENT_TIMESTAMP);
 
 CREATE TABLE IF NOT EXISTS identity_categories (
     identity_id varchar(64) NOT NULL REFERENCES identities (id),

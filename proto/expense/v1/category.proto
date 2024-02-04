@@ -16,17 +16,26 @@ service CategoryService {
     rpc DeleteCategory (DeleteCategoryRequest) returns (google.protobuf.Empty);
 }
 
+enum CategoryType {
+    CATEGORY_TYPE_UNSPECIFIED = 0;
+    EXPENSES = 1;
+    EARNINGS = 2;
+}
+
 message Category {
-    string id = 1;
-    string name = 2;
+    string name = 1;
+    CategoryType type = 2;
+    string author = 3;
 }
 
 message CreateCategoryRequest {
     string name = 1 [(buf.validate.field).string = { min_len: 2, max_len: 32 }];
+    CategoryType type = 2 [(buf.validate.field).enum = { in: [1, 2] }];
 }
 
 message ListCategoriesRequest {
     string search_query = 1;
+    CategoryType type = 2;
     int32 page_size = 50;
     string page_token = 51;
 }

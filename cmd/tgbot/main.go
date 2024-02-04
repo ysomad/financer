@@ -14,6 +14,7 @@ import (
 	goredis "github.com/redis/go-redis/v9"
 	tele "gopkg.in/telebot.v3"
 
+	"github.com/ysomad/financer/internal/gen/proto/expense/v1/expensev1connect"
 	"github.com/ysomad/financer/internal/gen/proto/telegram/v1/telegramv1connect"
 	"github.com/ysomad/financer/internal/slogx"
 	"github.com/ysomad/financer/internal/tgbot"
@@ -84,22 +85,23 @@ func main() {
 		conf.Server.URL,
 		connect.WithInterceptors(validateInterceptor))
 
+	categoryClient := expensev1connect.NewCategoryServiceClient(
+		httpClient,
+		conf.Server.URL,
+		connect.WithHTTPGet(),
+		connect.WithInterceptors(validateInterceptor))
+
 	bot := tgbot.New(conf, rdb, tgbot.IdentityService{
 		Client: identityClient,
 		Cache:  identityCache,
-	}, accessTokenClient, stateCache)
+	}, accessTokenClient, categoryClient, stateCache)
 
 	b.Handle("/start", bot.Start)
 	b.Handle("/set_currency", bot.CmdSetCurrency)
+	b.Handle("/categories", bot.CmdCategories)
 
 	b.Handle(tele.OnCallback, bot.HandleCallback)
 	b.Handle(tele.OnText, bot.HandleText)
 
 	b.Start()
-}
-
-func newServerRequest[T any](msg *T, apiKey string) *connect.Request[T] {
-	r := connect.NewRequest(msg)
-	r.Header().Set("X-API-KEY", apiKey)
-	return r
 }

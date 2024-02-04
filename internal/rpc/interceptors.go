@@ -8,6 +8,7 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/ysomad/financer/internal/auth"
 )
 
 var errUnauthenticated = errors.New("unauthenticated")
@@ -49,7 +50,15 @@ func NewAccessTokenInterceptor(secretKey string) connect.UnaryInterceptorFunc {
 				return nil, connect.NewError(connect.CodeUnauthenticated, errUnauthenticated)
 			}
 
-			token, err := jwt.Parse(hdrparts[1], func(t *jwt.Token) (interface{}, error) { return secretKey, nil })
+			slog.Debug("TEST", "TEST", hdrparts[1])
+
+			token, err := jwt.Parse(hdrparts[1], func(t *jwt.Token) (interface{}, error) {
+				if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+					return nil, errors.New("unexpected access token signing method")
+				}
+
+				return []byte(secretKey), nil
+			})
 			if err != nil {
 				slog.Info("access token not parsed",
 					"endpoint", req.Spec().Procedure,
@@ -64,6 +73,51 @@ func NewAccessTokenInterceptor(secretKey string) connect.UnaryInterceptorFunc {
 					"addr", req.Peer().Addr)
 				return nil, connect.NewError(connect.CodeUnauthenticated, errUnauthenticated)
 			}
+
+			mapClaims, ok := token.Claims.(jwt.MapClaims)
+			if !ok {
+				slog.Error("invalid claims", "endpoint", req.Spec().Procedure, "addr", req.Peer().Addr)
+				return nil, connect.NewError(connect.CodeUnauthenticated, errUnauthenticated)
+			}
+
+			identitysub, ok := mapClaims["sub"]
+			if !ok {
+				slog.Error("access token without subject",
+					"endpoint", req.Spec().Procedure,
+					"addr", req.Peer().Addr)
+				return nil, connect.NewError(connect.CodeUnauthenticated, errUnauthenticated)
+			}
+
+			identityID, ok := identitysub.(string)
+			if !ok {
+				slog.Error("invalid subject",
+					"endpoint", req.Spec().Procedure,
+					"addr", req.Peer().Addr)
+				return nil, connect.NewError(connect.CodeUnauthenticated, errUnauthenticated)
+			}
+
+			tgsub, ok := mapClaims["tg_sub"]
+			if !ok {
+				slog.Error("telegram subject not present",
+					"endpoint", req.Spec().Procedure,
+					"addr", req.Peer().Addr)
+				return nil, connect.NewError(connect.CodeUnauthenticated, errUnauthenticated)
+
+			}
+
+			slog.Debug("debug", "tgsub", tgsub)
+
+			tguid, ok := tgsub.(float64)
+			if !ok {
+				slog.Error("invalid telegram subject",
+					"endpoint", req.Spec().Procedure,
+					"addr", req.Peer().Addr)
+				return nil, connect.NewError(connect.CodeUnauthenticated, errUnauthenticated)
+
+			}
+
+			ctx = auth.WithIdentityID(ctx, identityID)
+			ctx = auth.WithTGUID(ctx, int64(tguid))
 
 			return next(ctx, req)
 		})
