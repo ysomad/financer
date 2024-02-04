@@ -36,7 +36,7 @@ message CreateCategoryRequest {
 message ListCategoriesRequest {
     string search_query = 1;
     CategoryType type = 2;
-    int32 page_size = 50;
+    int32 page_size = 50 [(buf.validate.field).int32 = { gte: 1, lte: 100 }];
     string page_token = 51;
 }
 
