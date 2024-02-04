@@ -105,8 +105,6 @@ func NewAccessTokenInterceptor(secretKey string) connect.UnaryInterceptorFunc {
 
 			}
 
-			slog.Debug("debug", "tgsub", tgsub)
-
 			tguid, ok := tgsub.(float64)
 			if !ok {
 				slog.Error("invalid telegram subject",

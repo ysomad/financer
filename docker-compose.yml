@@ -6,7 +6,9 @@ volumes:
 
 services:
   postgres:
-    image: "postgres:16.1-alpine"
+    build:
+      context: .
+      dockerfile: ./postgres.Dockerfile
     container_name: postgres
     restart: unless-stopped
     environment:

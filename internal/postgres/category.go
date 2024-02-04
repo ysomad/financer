@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"time"
 
 	sq "github.com/Masterminds/squirrel"
@@ -53,6 +54,10 @@ func (s CategoryStorage) GetAll(ctx context.Context, p GetAllCategoriesParams) (
 		b = b.Where(sq.Eq{"c.type": p.CategoryType})
 	}
 
+	if p.SearchQuery != "" {
+		b = b.Where(sq.Expr("c.name &@ ?", p.SearchQuery))
+	}
+
 	if p.PageToken != "" {
 		prevName, prevTime, err := paging.Token(p.PageToken).Decode()
 		if err != nil {
@@ -69,6 +74,8 @@ func (s CategoryStorage) GetAll(ctx context.Context, p GetAllCategoriesParams) (
 	if err != nil {
 		return CategoryList{}, err
 	}
+
+	slog.Debug("list categorues query", "q", sql)
 
 	rows, err := s.Pool.Query(ctx, sql, args...)
 	if err != nil {

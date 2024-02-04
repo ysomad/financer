@@ -53,6 +53,15 @@ CREATE TABLE IF NOT EXISTS identity_categories (
     category varchar(64) NOT NULL REFERENCES categories (name),
     CONSTRAINT identity_categories_pkey PRIMARY KEY (identity_id, category) -- implement many2many
 );
+
+-- fulltext search (https://pgroonga.github.io/tutorial/)
+CREATE EXTENSION IF NOT EXISTS pgroonga;
+
+-- Disable sequential scan to ensure using pgroonga index
+SET enable_seqscan = off;
+
+CREATE INDEX pgroonga_category_name_index ON categories USING pgroonga (name);
+
 -- +goose StatementEnd
 
 -- +goose Down
