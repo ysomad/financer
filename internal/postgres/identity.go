@@ -104,7 +104,9 @@ func (s *IdentityStorage) FindByTelegramUID(ctx context.Context, tguid int64) (I
 			"t.telegram_uid telegram_uid").
 		From("identity_traits t").
 		InnerJoin("identities i on t.identity_id = i.id").
-		Where(sq.Eq{"telegram_uid": tguid}).ToSql()
+		Where(sq.Eq{"telegram_uid": tguid}).
+		Where(sq.Eq{"deleted_at": nil}).
+		ToSql()
 	if err != nil {
 		return Identity{}, err
 	}
@@ -136,7 +138,8 @@ func (s *IdentityStorage) Get(ctx context.Context, identityID string) (Identity,
 			"t.telegram_uid telegram_uid").
 		From("identity_traits t").
 		InnerJoin("identities i on t.identity_id = i.id").
-		Where(sq.Eq{"i.id": identityID}).ToSql()
+		Where(sq.Eq{"i.id": identityID}).
+		Where(sq.Eq{"deleted_at": nil}).ToSql()
 	if err != nil {
 		return Identity{}, err
 	}
@@ -170,7 +173,7 @@ func (s *IdentityStorage) Update(ctx context.Context, in UpdateIdentityIn) error
 		Set("currency", in.Currency).
 		Set("updated_at", in.UpdatedAt).
 		Where(sq.Eq{"identity_id": in.IdentityID}).
-		ToSql()
+		Where(sq.Eq{"deleted_at": nil}).ToSql()
 	if err != nil {
 		return nil
 	}

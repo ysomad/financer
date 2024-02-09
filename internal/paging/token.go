@@ -38,3 +38,7 @@ func (t Token) Decode() (string, time.Time, error) {
 
 	return parts[0], parsedTime, nil
 }
+
+func (t Token) String() string {
+	return string(t)
+}

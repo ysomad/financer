@@ -43,7 +43,7 @@ var ErrNotFound = errors.New("entry not found")
 func (c IdentityCache) Get(ctx context.Context, tgUID int64) (model.Identity, error) {
 	cmd := c.client.Get(ctx, identityCacheKey(tgUID))
 	if err := cmd.Err(); err != nil {
-		if errors.Is(err, ErrNotFound) {
+		if errors.Is(err, redis.Nil) {
 			return model.Identity{}, ErrNotFound
 		}
 

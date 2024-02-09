@@ -47,6 +47,7 @@ func (s CategoryStorage) GetAll(ctx context.Context, p GetAllCategoriesParams) (
 		From("identity_categories ic").
 		InnerJoin("categories c ON ic.category = c.name").
 		Where(sq.Eq{"ic.identity_id": p.IdentityID}).
+		Where(sq.Eq{"c.deleted_at": nil}).
 		OrderBy("c.created_at", "c.name").
 		Limit(uint64(p.PageSize) + 1)
 
@@ -55,6 +56,7 @@ func (s CategoryStorage) GetAll(ctx context.Context, p GetAllCategoriesParams) (
 	}
 
 	if p.SearchQuery != "" {
+		// fulltext search using PGroonga https://pgroonga.github.io
 		b = b.Where(sq.Expr("c.name &@ ?", p.SearchQuery))
 	}
 
@@ -82,20 +84,18 @@ func (s CategoryStorage) GetAll(ctx context.Context, p GetAllCategoriesParams) (
 		return CategoryList{}, err
 	}
 
-	items, err := pgx.CollectRows(rows, pgx.RowToStructByName[Category])
+	cats, err := pgx.CollectRows(rows, pgx.RowToStructByName[Category])
 	if err != nil {
 		return CategoryList{}, fmt.Errorf("rows not collected: %w", err)
 	}
 
-	list := CategoryList{
-		Categories: items,
-	}
-	totalItems := len(items)
+	list := CategoryList{Categories: cats}
+	totalCats := len(cats)
 
 	// has next page
-	if totalItems == p.PageSize+1 {
-		list.Categories = items[:totalItems-1]
-		list.NextPageToken = string(paging.NewToken(items[totalItems-1].Name, items[totalItems-1].CreatedAt))
+	if totalCats == p.PageSize+1 {
+		list.Categories = cats[:totalCats-1]
+		list.NextPageToken = paging.NewToken(cats[totalCats-1].Name, cats[totalCats-1].CreatedAt).String()
 	}
 
 	return list, nil
