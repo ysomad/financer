@@ -20,15 +20,17 @@ service ExpenseService {
 
 message Expense {
     string id = 1;
-    google.type.Money amount = 2;
-    string title = 3;
+    google.type.Money money = 2;
+    string name = 3;
     string category = 4;
+    google.type.Date date = 5; // when expense was happen
 }
 
 message DeclareExpenseRequest {
-    google.type.Money amount = 1;
-    string title = 2 [(buf.validate.field).string = { min_len: 2, max_len: 64 }];
-    string category_id = 3;
+    google.type.Money money = 1;
+    string name = 2 [(buf.validate.field).string = { min_len: 2, max_len: 64 }]; // required
+    string category_id = 3; // not specified will come to "Not specified" category
+    google.type.Date date = 4;
 }
 
 message ListExpensesRequest {

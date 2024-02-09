@@ -7,6 +7,10 @@ CREATE TABLE IF NOT EXISTS identities (
     deleted_at timestamptz
 );
 
+CREATE INDEX idx_active_identities ON identities (deleted_at)
+WHERE deleted_at IS NULL;
+
+
 CREATE TABLE IF NOT EXISTS identity_traits (
     identity_id varchar(64) NOT NULL UNIQUE REFERENCES identities (id),
     currency char(3) NOT NULL,
@@ -14,14 +18,18 @@ CREATE TABLE IF NOT EXISTS identity_traits (
     updated_at timestamptz
 );
 
-CREATE TYPE category_type AS ENUM ('EXPENSES', 'EARNINGS');
+CREATE TYPE category_type AS ENUM ('UNSPECIFIED', 'EXPENSES', 'EARNINGS');
 
 CREATE TABLE IF NOT EXISTS categories (
     name varchar(64) PRIMARY KEY NOT NULL,
     type category_type NOT NULL,
     author varchar(64) REFERENCES identities (id),
-    created_at timestamptz NOT NULL
+    created_at timestamptz NOT NULL,
+    deleted_at timestamptz
 );
+
+CREATE INDEX idx_active_categories ON categories (deleted_at)
+WHERE deleted_at IS NULL;
 
 INSERT INTO categories(name, type, created_at) VALUES
     ('🛏️ Rent', 'EXPENSES', CURRENT_TIMESTAMP),
@@ -46,13 +54,31 @@ INSERT INTO categories(name, type, created_at) VALUES
     ('🏛️ Taxes', 'EXPENSES', CURRENT_TIMESTAMP),
     ('🤷 Other', 'EXPENSES', CURRENT_TIMESTAMP),
     ('💳 Salary', 'EARNINGS', CURRENT_TIMESTAMP),
-    ('💰 Bonuses', 'EARNINGS', CURRENT_TIMESTAMP);
+    ('💰 Bonuses', 'EARNINGS', CURRENT_TIMESTAMP),
+    ('❓ Unspecified', 'UNSPECIFIED', CURRENT_TIMESTAMP);
 
 CREATE TABLE IF NOT EXISTS identity_categories (
     identity_id varchar(64) NOT NULL REFERENCES identities (id),
     category varchar(64) NOT NULL REFERENCES categories (name),
     CONSTRAINT identity_categories_pkey PRIMARY KEY (identity_id, category) -- implement many2many
 );
+
+CREATE TABLE IF NOT EXISTS expenses (
+    id varchar(64) PRIMARY KEY NOT NULL,
+    identity_id varchar(64) NOT NULL REFERENCES identities (id),
+    category varchar(64) NOT NULL REFERENCES categories (name),
+    name varchar(64) NOT NULL,
+    currency char(3) NOT NULL,
+    money_units bigint NOT NULL,
+    money_nanos int NOT NULL,
+    date date NOT NULL, -- when expense was happen
+    created_at timestamptz NOT NULL,
+    updated_at timestamptz,
+    deleted_at timestamptz
+);
+
+CREATE INDEX idx_active_expenses ON expenses (deleted_at)
+WHERE deleted_at IS NULL;
 
 -- fulltext search (https://pgroonga.github.io/tutorial/)
 CREATE EXTENSION IF NOT EXISTS pgroonga;

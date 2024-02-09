@@ -17,7 +17,7 @@ service CategoryService {
 }
 
 enum CategoryType {
-    CATEGORY_TYPE_UNSPECIFIED = 0;
+    UNSPECIFIED = 0;
     EXPENSES = 1;
     EARNINGS = 2;
 }
