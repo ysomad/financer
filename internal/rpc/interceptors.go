@@ -121,3 +121,18 @@ func NewAccessTokenInterceptor(secretKey string) connect.UnaryInterceptorFunc {
 		})
 	})
 }
+
+func NewLoggingInterceptor() connect.UnaryInterceptorFunc {
+	return connect.UnaryInterceptorFunc(func(next connect.UnaryFunc) connect.UnaryFunc {
+		return connect.UnaryFunc(func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
+			res, err := next(ctx, req)
+			if err != nil {
+				slog.Error("response with error",
+					"err", err.Error(),
+					"endpoint", req.Spec().Procedure,
+					"addr", req.Peer().Addr)
+			}
+			return res, err
+		})
+	})
+}

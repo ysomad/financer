@@ -25,7 +25,7 @@ type GetAllCategoriesParams struct {
 	IdentityID   string
 	SearchQuery  string
 	CategoryType string
-	PageSize     int
+	PageSize     int32
 	PageToken    string
 }
 
@@ -93,7 +93,7 @@ func (s CategoryStorage) GetAll(ctx context.Context, p GetAllCategoriesParams) (
 	totalCats := len(cats)
 
 	// has next page
-	if totalCats == p.PageSize+1 {
+	if totalCats == int(p.PageSize)+1 {
 		list.Categories = cats[:totalCats-1]
 		list.NextPageToken = paging.NewToken(cats[totalCats-1].Name, cats[totalCats-1].CreatedAt).String()
 	}

@@ -23,8 +23,6 @@ func NewIdentityStorage(c *pgclient.Client) *IdentityStorage {
 	}
 }
 
-var ErrIdentityNotFound = errors.New("identity not found")
-
 type Identity struct {
 	ID          string             `db:"id"`
 	CreatedAt   time.Time          `db:"created_at"`
@@ -34,18 +32,18 @@ type Identity struct {
 	Currency    string             `db:"currency"`
 }
 
-type InsertIdentityIn struct {
+type InsertIdentityParams struct {
 	ID          string
 	CreatedAt   time.Time
 	TelegramUID int64
 	Currency    string
 }
 
-func (s *IdentityStorage) Insert(ctx context.Context, in InsertIdentityIn) error {
+func (s *IdentityStorage) Insert(ctx context.Context, p InsertIdentityParams) error {
 	sql1, args1, err := s.Builder.
 		Insert("identities").
 		Columns("id, created_at").
-		Values(in.ID, in.CreatedAt).
+		Values(p.ID, p.CreatedAt).
 		ToSql()
 	if err != nil {
 		return err
@@ -54,7 +52,7 @@ func (s *IdentityStorage) Insert(ctx context.Context, in InsertIdentityIn) error
 	sql2, args2, err := s.Builder.
 		Insert("identity_traits").
 		Columns("telegram_uid, identity_id, currency").
-		Values(in.TelegramUID, in.ID, in.Currency).
+		Values(p.TelegramUID, p.ID, p.Currency).
 		ToSql()
 	if err != nil {
 		return err
@@ -65,7 +63,7 @@ func (s *IdentityStorage) Insert(ctx context.Context, in InsertIdentityIn) error
 		Insert("identity_categories").
 		Columns("identity_id", "category").
 		Select(
-			sq.Select(fmt.Sprintf("'%s'", in.ID), "name").
+			sq.Select(fmt.Sprintf("'%s'", p.ID), "name").
 				From("categories").
 				Where(sq.Eq{"author": nil})).ToSql()
 	if err != nil {
@@ -119,7 +117,7 @@ func (s *IdentityStorage) FindByTelegramUID(ctx context.Context, tguid int64) (I
 	id, err := pgx.CollectOneRow(rows, pgx.RowToStructByName[Identity])
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return Identity{}, ErrIdentityNotFound
+			return Identity{}, ErrNotFound
 		}
 
 		return Identity{}, fmt.Errorf("error getting result from row: %w", err)
@@ -152,7 +150,7 @@ func (s *IdentityStorage) Get(ctx context.Context, identityID string) (Identity,
 	id, err := pgx.CollectOneRow(rows, pgx.RowToStructByName[Identity])
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return Identity{}, ErrIdentityNotFound
+			return Identity{}, ErrNotFound
 		}
 
 		return Identity{}, fmt.Errorf("error getting result from row: %w", err)
@@ -161,19 +159,19 @@ func (s *IdentityStorage) Get(ctx context.Context, identityID string) (Identity,
 	return id, nil
 }
 
-type UpdateIdentityIn struct {
+type UpdateIdentityParams struct {
 	IdentityID string
 	Currency   string
 	UpdatedAt  time.Time
 }
 
-func (s *IdentityStorage) Update(ctx context.Context, in UpdateIdentityIn) error {
+func (s *IdentityStorage) Update(ctx context.Context, p UpdateIdentityParams) error {
 	sql, args, err := s.Builder.
 		Update("identity_traits").
-		Set("currency", in.Currency).
-		Set("updated_at", in.UpdatedAt).
-		Where(sq.Eq{"identity_id": in.IdentityID}).
-		Where(sq.Eq{"deleted_at": nil}).ToSql()
+		Set("currency", p.Currency).
+		Set("updated_at", p.UpdatedAt).
+		Where(sq.Eq{"identity_id": p.IdentityID}).
+		ToSql()
 	if err != nil {
 		return nil
 	}

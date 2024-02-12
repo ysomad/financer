@@ -3,7 +3,6 @@ package v1
 import (
 	"context"
 	"errors"
-	"log/slog"
 	"time"
 
 	"connectrpc.com/connect"
@@ -31,14 +30,13 @@ const (
 func (s *IdentityServer) CreateIdentity(ctx context.Context, r *connect.Request[pb.CreateIdentityRequest]) (*connect.Response[pb.Identity], error) {
 	identityID := guid.New("identity")
 
-	err := s.identity.Insert(ctx, postgres.InsertIdentityIn{
+	err := s.identity.Insert(ctx, postgres.InsertIdentityParams{
 		ID:          identityID,
 		CreatedAt:   time.Now(),
 		TelegramUID: r.Msg.TgUid,
 		Currency:    defaultCurrency,
 	})
 	if err != nil {
-		slog.Info("identity not created", "endpoint", r.Spec().Procedure, "err", err.Error())
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 
@@ -52,11 +50,9 @@ func (s *IdentityServer) CreateIdentity(ctx context.Context, r *connect.Request[
 func (s *IdentityServer) GetIdentity(ctx context.Context, r *connect.Request[pb.GetIdentityRequest]) (*connect.Response[pb.Identity], error) {
 	identity, err := s.identity.FindByTelegramUID(ctx, r.Msg.TgUid)
 	if err != nil {
-		if errors.Is(err, postgres.ErrIdentityNotFound) {
-			return nil, connect.NewError(connect.CodeNotFound, postgres.ErrIdentityNotFound)
+		if errors.Is(err, postgres.ErrNotFound) {
+			return nil, connect.NewError(connect.CodeNotFound, postgres.ErrNotFound)
 		}
-
-		slog.Info("get identity error", "endpoint", r.Spec().Procedure, "err", err.Error())
 
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -69,18 +65,16 @@ func (s *IdentityServer) GetIdentity(ctx context.Context, r *connect.Request[pb.
 }
 
 func (s *IdentityServer) UpdateIdentity(ctx context.Context, r *connect.Request[pb.UpdateIdentityRequest]) (*connect.Response[pb.Identity], error) {
-	if err := s.identity.Update(ctx, postgres.UpdateIdentityIn{
+	if err := s.identity.Update(ctx, postgres.UpdateIdentityParams{
 		IdentityID: r.Msg.Id,
 		Currency:   r.Msg.Currency,
 		UpdatedAt:  time.Now(),
 	}); err != nil {
-		slog.Info("identity not updated", "endpoint", r.Spec().Procedure, "err", err.Error())
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 
 	identity, err := s.identity.Get(ctx, r.Msg.Id)
 	if err != nil {
-		slog.Info("identity not found", "endpoint", r.Spec().Procedure, "err", err.Error())
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 

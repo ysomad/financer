@@ -23,6 +23,7 @@ import (
 	"github.com/ysomad/financer/internal/postgres/pgclient"
 	"github.com/ysomad/financer/internal/rpc"
 	categoryv1 "github.com/ysomad/financer/internal/rpc/expense/v1"
+	expensev1 "github.com/ysomad/financer/internal/rpc/expense/v1"
 	tgv1 "github.com/ysomad/financer/internal/rpc/telegram/v1"
 	"github.com/ysomad/financer/internal/server/config"
 	"github.com/ysomad/financer/internal/slogx"
@@ -64,12 +65,15 @@ func main() {
 
 	identityStorage := postgres.NewIdentityStorage(pgclient)
 	categoryStorage := postgres.NewCategoryStorage(pgclient)
+	expenseStorage := postgres.NewExpenseStorage(pgclient)
 
 	// interceptors
 	validateInterceptor, err := validate.NewInterceptor()
 	if err != nil {
 		slogx.Fatal("validate interceptor not created", err)
 	}
+
+	logInterceptor := rpc.NewLoggingInterceptor()
 
 	tgInterceptor := rpc.NewAPIKeyInterceptor(conf.APIKey)
 
@@ -83,21 +87,28 @@ func main() {
 	identitysrv := tgv1.NewIdentityServer(identityStorage)
 	path, handler := telegramv1connect.NewIdentityServiceHandler(
 		identitysrv,
-		connect.WithInterceptors(validateInterceptor, tgInterceptor))
+		connect.WithInterceptors(logInterceptor, validateInterceptor, tgInterceptor))
 	mux.Handle(path, handler)
 
 	// access token service
 	tokensrv := tgv1.NewAccessTokenServer(identityStorage, conf.AccessToken)
 	path, handler = telegramv1connect.NewAccessTokenServiceHandler(
 		tokensrv,
-		connect.WithInterceptors(validateInterceptor, tgInterceptor))
+		connect.WithInterceptors(logInterceptor, validateInterceptor, tgInterceptor))
 	mux.Handle(path, handler)
 
 	// category service
 	categorysrv := categoryv1.NewCategoryServer(categoryStorage)
 	path, handler = expensev1connect.NewCategoryServiceHandler(
 		categorysrv,
-		connect.WithInterceptors(validateInterceptor, accessTokenInterceptor))
+		connect.WithInterceptors(logInterceptor, validateInterceptor, accessTokenInterceptor))
+	mux.Handle(path, handler)
+
+	// expense service
+	expensesrv := expensev1.NewExpenseServer(expenseStorage)
+	path, handler = expensev1connect.NewExpenseServiceHandler(
+		expensesrv,
+		connect.WithInterceptors(logInterceptor, validateInterceptor, accessTokenInterceptor))
 	mux.Handle(path, handler)
 
 	srv := httpserver.New(mux, httpserver.WithAddr("0.0.0.0", conf.Port))

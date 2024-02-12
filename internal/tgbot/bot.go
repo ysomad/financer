@@ -6,12 +6,13 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 
 	"connectrpc.com/connect"
-	"gopkg.in/telebot.v3"
-
 	"github.com/ladydascalie/currency"
 	goredis "github.com/redis/go-redis/v9"
+	"gopkg.in/telebot.v3"
+
 	expensev1 "github.com/ysomad/financer/internal/gen/proto/expense/v1"
 	"github.com/ysomad/financer/internal/gen/proto/expense/v1/expensev1connect"
 	pb "github.com/ysomad/financer/internal/gen/proto/telegram/v1"
@@ -22,11 +23,13 @@ import (
 )
 
 var messages = map[string]string{
-	"internal_error":     "I'm not feeling good right now, try later...",
-	"currency_selection": "Choose from list or send any other currency in ISO-4217 format (for example UAH, KZT, GBP etc):",
-	"currency_set":       "%s saved as your default currency. Next time you send me a command without specifying currency I'll use %s.\n\nYou can always change default currency by using /set_currency command",
-	"invalid_currency":   "Please provide currency code in ISO-4217 format...",
-	"canceled":           "Current operation is canceled",
+	"internal_error":         "I'm not feeling good right now, try later...",
+	"currency_selection":     "Choose from list or send any other currency in ISO-4217 format (for example UAH, KZT, GBP etc):",
+	"currency_set":           "%s saved as your default currency. Next time you send me a command without specifying currency I'll use %s.\n\nYou can always change default currency by using /set_currency command",
+	"invalid_currency":       "Please provide currency code in ISO-4217 format...",
+	"canceled":               "Current operation is canceled",
+	"invalid_expense_format": "Expense must be in format: {?+}{money amount} {expense} {?currency} {?date in format 20.05 or 20.05.1999}",
+	"invalid_date":           "Date must be in format: '20.01.2006' or '20.01.06' or '20.01'",
 }
 
 type IdentityService struct {
@@ -41,6 +44,7 @@ type Bot struct {
 	accessToken telegramv1connect.AccessTokenServiceClient
 	category    expensev1connect.CategoryServiceClient
 	state       redis.StateCache
+	expense     expensev1connect.ExpenseServiceClient
 }
 
 func New(
@@ -50,6 +54,7 @@ func New(
 	accessToken telegramv1connect.AccessTokenServiceClient,
 	category expensev1connect.CategoryServiceClient,
 	state redis.StateCache,
+	expense expensev1connect.ExpenseServiceClient,
 ) *Bot {
 	return &Bot{
 		conf:        conf,
@@ -58,6 +63,7 @@ func New(
 		category:    category,
 		redis:       rdb,
 		state:       state,
+		expense:     expense,
 	}
 }
 
@@ -220,9 +226,88 @@ func (b *Bot) HandleText(c telebot.Context) error {
 		}
 
 		return c.Send(msgCurrencySet(currency))
+	default:
+		_, err := b.authorize(ctx, tguid)
+		if err != nil {
+			slog.Error("identity not found in cache", err)
+			return c.Send(messages["internal_error"])
+		}
+
+		// handle expense creation
+		//`{?+}{money amount} {expense} {?currency} {?date in format 20.05 or 20.05.1999}`:
+		args := strings.Split(c.Text(), " ")
+		argsNum := len(args)
+
+		slog.Debug("ARGS", "ARGS", args)
+
+		if argsNum < 2 {
+			return c.Send(messages["invalid_expense_format"])
+		}
+
+		catType := expensev1.CategoryType_EXPENSES
+		money := strings.ReplaceAll(args[0], "-", "")
+
+		if strings.HasPrefix(money, "+") {
+			catType = expensev1.CategoryType_EARNINGS
+			money = strings.ReplaceAll(money, "+", "")
+		}
+
+		expense := args[1]
+		curr := ""
+		date := time.Now()
+
+		if argsNum == 3 {
+			arg2 := strings.ToUpper(args[2]) // currency or date
+
+			if currency.Valid(arg2) {
+				curr = arg2
+				date = time.Now()
+			} else {
+				date, err = parseDate(arg2)
+				if err != nil {
+					slog.Error("date not parsed", "err", err.Error())
+					return c.Send(messages["invalid_date"])
+				}
+			}
+		}
+
+		if argsNum == 4 {
+			curr = strings.ToUpper(args[2])
+			if !currency.Valid(curr) {
+				return c.Send(messages["invalid_currency"])
+			}
+
+			date, err = parseDate(args[3])
+			if err != nil {
+				return c.Send(messages["invalid_date"])
+			}
+		}
+
+		slog.Debug("EXPENSE", "cat_type", catType, "exp", expense, "curr", curr, "year", date.Year(), "month", date.Month(), "day", date.Day(), "money", money)
 	}
 
 	return nil
+}
+
+func parseDate(s string) (time.Time, error) {
+	var (
+		formats = [3]string{"02.01.2006", "02.01.06", "02.01"}
+		t       time.Time
+		err     error
+	)
+
+	for _, layout := range formats {
+		t, err = time.Parse(layout, s)
+		if err == nil {
+			if t.Year() == 0 {
+				t = time.Date(time.Now().Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.Local)
+			}
+
+			return t, nil
+		}
+	}
+
+	return t, fmt.Errorf("invalid date format: %s", s)
 }
 
 func (b *Bot) HandleCallback(c telebot.Context) error {

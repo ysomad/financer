@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS identity_traits (
     updated_at timestamptz
 );
 
-CREATE TYPE category_type AS ENUM ('UNSPECIFIED', 'EXPENSES', 'EARNINGS');
+CREATE TYPE category_type AS ENUM ('EXPENSES', 'EARNINGS');
 
 CREATE TABLE IF NOT EXISTS categories (
     name varchar(64) PRIMARY KEY NOT NULL,
@@ -54,8 +54,7 @@ INSERT INTO categories(name, type, created_at) VALUES
     ('🏛️ Taxes', 'EXPENSES', CURRENT_TIMESTAMP),
     ('🤷 Other', 'EXPENSES', CURRENT_TIMESTAMP),
     ('💳 Salary', 'EARNINGS', CURRENT_TIMESTAMP),
-    ('💰 Bonuses', 'EARNINGS', CURRENT_TIMESTAMP),
-    ('❓ Unspecified', 'UNSPECIFIED', CURRENT_TIMESTAMP);
+    ('💰 Bonuses', 'EARNINGS', CURRENT_TIMESTAMP);
 
 CREATE TABLE IF NOT EXISTS identity_categories (
     identity_id varchar(64) NOT NULL REFERENCES identities (id),
@@ -66,7 +65,7 @@ CREATE TABLE IF NOT EXISTS identity_categories (
 CREATE TABLE IF NOT EXISTS expenses (
     id varchar(64) PRIMARY KEY NOT NULL,
     identity_id varchar(64) NOT NULL REFERENCES identities (id),
-    category varchar(64) NOT NULL REFERENCES categories (name),
+    category varchar(64) REFERENCES categories (name),
     name varchar(64) NOT NULL,
     currency char(3) NOT NULL,
     money_units bigint NOT NULL,
@@ -76,6 +75,8 @@ CREATE TABLE IF NOT EXISTS expenses (
     updated_at timestamptz,
     deleted_at timestamptz
 );
+
+CREATE INDEX idx_expense_name ON expenses (name);
 
 CREATE INDEX idx_active_expenses ON expenses (deleted_at)
 WHERE deleted_at IS NULL;
@@ -93,6 +94,7 @@ CREATE INDEX pgroonga_category_name_index ON categories USING pgroonga (name);
 -- +goose Down
 -- +goose StatementBegin
 DROP TABLE IF EXISTS identity_categories;
+DROP TABLE IF EXISTS expenses;
 DROP TABLE IF EXISTS categories;
 DROP TYPE IF EXISTS category_type;
 DROP TABLE IF EXISTS identity_traits;

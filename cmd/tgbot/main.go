@@ -91,10 +91,16 @@ func main() {
 		connect.WithHTTPGet(),
 		connect.WithInterceptors(validateInterceptor))
 
+	expenseClient := expensev1connect.NewExpenseServiceClient(
+		httpClient,
+		conf.Server.URL,
+		connect.WithHTTPGet(),
+		connect.WithInterceptors(validateInterceptor))
+
 	bot := tgbot.New(conf, rdb, tgbot.IdentityService{
 		Client: identityClient,
 		Cache:  identityCache,
-	}, accessTokenClient, categoryClient, stateCache)
+	}, accessTokenClient, categoryClient, stateCache, expenseClient)
 
 	b.Handle("/start", bot.Start)
 	b.Handle("/set_currency", bot.CmdSetCurrency)

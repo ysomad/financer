@@ -2,7 +2,6 @@ package v1
 
 import (
 	"context"
-	"log/slog"
 
 	"connectrpc.com/connect"
 
@@ -34,11 +33,10 @@ func (s *CategoryServer) ListCategories(ctx context.Context, r *connect.Request[
 		IdentityID:   auth.IdentityID(ctx),
 		SearchQuery:  r.Msg.SearchQuery,
 		CategoryType: categoryType,
-		PageSize:     int(r.Msg.PageSize),
+		PageSize:     r.Msg.PageSize,
 		PageToken:    r.Msg.PageToken,
 	})
 	if err != nil {
-		slog.Error("categories not listed", "endpoint", r.Spec().Procedure, "err", err.Error())
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 

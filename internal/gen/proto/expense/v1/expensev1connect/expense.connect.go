@@ -34,6 +34,9 @@ const (
 // reflection-formatted method names, remove the leading slash and convert the remaining slash to a
 // period.
 const (
+	// ExpenseServiceFindExpenseProcedure is the fully-qualified name of the ExpenseService's
+	// FindExpense RPC.
+	ExpenseServiceFindExpenseProcedure = "/expense.v1.ExpenseService/FindExpense"
 	// ExpenseServiceDeclareExpenseProcedure is the fully-qualified name of the ExpenseService's
 	// DeclareExpense RPC.
 	ExpenseServiceDeclareExpenseProcedure = "/expense.v1.ExpenseService/DeclareExpense"
@@ -50,6 +53,7 @@ const (
 
 // ExpenseServiceClient is a client for the expense.v1.ExpenseService service.
 type ExpenseServiceClient interface {
+	FindExpense(context.Context, *connect.Request[v1.FindExpenseRequest]) (*connect.Response[v1.Expense], error)
 	DeclareExpense(context.Context, *connect.Request[v1.DeclareExpenseRequest]) (*connect.Response[v1.Expense], error)
 	ListExpenses(context.Context, *connect.Request[v1.ListExpensesRequest]) (*connect.Response[v1.ListExpensesResponse], error)
 	DeleteExpense(context.Context, *connect.Request[v1.DeleteExpenseRequest]) (*connect.Response[emptypb.Empty], error)
@@ -66,6 +70,11 @@ type ExpenseServiceClient interface {
 func NewExpenseServiceClient(httpClient connect.HTTPClient, baseURL string, opts ...connect.ClientOption) ExpenseServiceClient {
 	baseURL = strings.TrimRight(baseURL, "/")
 	return &expenseServiceClient{
+		findExpense: connect.NewClient[v1.FindExpenseRequest, v1.Expense](
+			httpClient,
+			baseURL+ExpenseServiceFindExpenseProcedure,
+			opts...,
+		),
 		declareExpense: connect.NewClient[v1.DeclareExpenseRequest, v1.Expense](
 			httpClient,
 			baseURL+ExpenseServiceDeclareExpenseProcedure,
@@ -92,10 +101,16 @@ func NewExpenseServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 
 // expenseServiceClient implements ExpenseServiceClient.
 type expenseServiceClient struct {
+	findExpense    *connect.Client[v1.FindExpenseRequest, v1.Expense]
 	declareExpense *connect.Client[v1.DeclareExpenseRequest, v1.Expense]
 	listExpenses   *connect.Client[v1.ListExpensesRequest, v1.ListExpensesResponse]
 	deleteExpense  *connect.Client[v1.DeleteExpenseRequest, emptypb.Empty]
 	updateExpense  *connect.Client[v1.UpdateExpenseRequest, v1.Expense]
+}
+
+// FindExpense calls expense.v1.ExpenseService.FindExpense.
+func (c *expenseServiceClient) FindExpense(ctx context.Context, req *connect.Request[v1.FindExpenseRequest]) (*connect.Response[v1.Expense], error) {
+	return c.findExpense.CallUnary(ctx, req)
 }
 
 // DeclareExpense calls expense.v1.ExpenseService.DeclareExpense.
@@ -120,6 +135,7 @@ func (c *expenseServiceClient) UpdateExpense(ctx context.Context, req *connect.R
 
 // ExpenseServiceHandler is an implementation of the expense.v1.ExpenseService service.
 type ExpenseServiceHandler interface {
+	FindExpense(context.Context, *connect.Request[v1.FindExpenseRequest]) (*connect.Response[v1.Expense], error)
 	DeclareExpense(context.Context, *connect.Request[v1.DeclareExpenseRequest]) (*connect.Response[v1.Expense], error)
 	ListExpenses(context.Context, *connect.Request[v1.ListExpensesRequest]) (*connect.Response[v1.ListExpensesResponse], error)
 	DeleteExpense(context.Context, *connect.Request[v1.DeleteExpenseRequest]) (*connect.Response[emptypb.Empty], error)
@@ -132,6 +148,11 @@ type ExpenseServiceHandler interface {
 // By default, handlers support the Connect, gRPC, and gRPC-Web protocols with the binary Protobuf
 // and JSON codecs. They also support gzip compression.
 func NewExpenseServiceHandler(svc ExpenseServiceHandler, opts ...connect.HandlerOption) (string, http.Handler) {
+	expenseServiceFindExpenseHandler := connect.NewUnaryHandler(
+		ExpenseServiceFindExpenseProcedure,
+		svc.FindExpense,
+		opts...,
+	)
 	expenseServiceDeclareExpenseHandler := connect.NewUnaryHandler(
 		ExpenseServiceDeclareExpenseProcedure,
 		svc.DeclareExpense,
@@ -155,6 +176,8 @@ func NewExpenseServiceHandler(svc ExpenseServiceHandler, opts ...connect.Handler
 	)
 	return "/expense.v1.ExpenseService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
+		case ExpenseServiceFindExpenseProcedure:
+			expenseServiceFindExpenseHandler.ServeHTTP(w, r)
 		case ExpenseServiceDeclareExpenseProcedure:
 			expenseServiceDeclareExpenseHandler.ServeHTTP(w, r)
 		case ExpenseServiceListExpensesProcedure:
@@ -171,6 +194,10 @@ func NewExpenseServiceHandler(svc ExpenseServiceHandler, opts ...connect.Handler
 
 // UnimplementedExpenseServiceHandler returns CodeUnimplemented from all methods.
 type UnimplementedExpenseServiceHandler struct{}
+
+func (UnimplementedExpenseServiceHandler) FindExpense(context.Context, *connect.Request[v1.FindExpenseRequest]) (*connect.Response[v1.Expense], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("expense.v1.ExpenseService.FindExpense is not implemented"))
+}
 
 func (UnimplementedExpenseServiceHandler) DeclareExpense(context.Context, *connect.Request[v1.DeclareExpenseRequest]) (*connect.Response[v1.Expense], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("expense.v1.ExpenseService.DeclareExpense is not implemented"))
