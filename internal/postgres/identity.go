@@ -17,8 +17,8 @@ type IdentityStorage struct {
 	*pgclient.Client
 }
 
-func NewIdentityStorage(c *pgclient.Client) *IdentityStorage {
-	return &IdentityStorage{
+func NewIdentityStorage(c *pgclient.Client) IdentityStorage {
+	return IdentityStorage{
 		Client: c,
 	}
 }
@@ -39,7 +39,7 @@ type InsertIdentityParams struct {
 	Currency    string
 }
 
-func (s *IdentityStorage) Insert(ctx context.Context, p InsertIdentityParams) error {
+func (s IdentityStorage) Insert(ctx context.Context, p InsertIdentityParams) error {
 	sql1, args1, err := s.Builder.
 		Insert("identities").
 		Columns("id, created_at").
@@ -92,7 +92,7 @@ func (s *IdentityStorage) Insert(ctx context.Context, p InsertIdentityParams) er
 	return nil
 }
 
-func (s *IdentityStorage) FindByTelegramUID(ctx context.Context, tguid int64) (Identity, error) {
+func (s IdentityStorage) FindByTelegramUID(ctx context.Context, tguid int64) (Identity, error) {
 	sql, args, err := s.Builder.
 		Select("i.id id",
 			"i.created_at created_at",
@@ -126,7 +126,7 @@ func (s *IdentityStorage) FindByTelegramUID(ctx context.Context, tguid int64) (I
 	return id, nil
 }
 
-func (s *IdentityStorage) Get(ctx context.Context, identityID string) (Identity, error) {
+func (s IdentityStorage) Get(ctx context.Context, identityID string) (Identity, error) {
 	sql, args, err := s.Builder.
 		Select("i.id id",
 			"i.created_at created_at",
@@ -159,13 +159,32 @@ func (s *IdentityStorage) Get(ctx context.Context, identityID string) (Identity,
 	return id, nil
 }
 
+func (s IdentityStorage) GetCurrency(ctx context.Context, identityID string) (string, error) {
+	sql, args, err := s.Builder.
+		Select("currency").
+		From("identity_traits").
+		Where(sq.Eq{"identity_id": identityID}).
+		ToSql()
+	if err != nil {
+		return "", err
+	}
+
+	var currency string
+
+	if err := s.Pool.QueryRow(ctx, sql, args...).Scan(&currency); err != nil {
+		return "", fmt.Errorf("query not executed: %w", err)
+	}
+
+	return currency, nil
+}
+
 type UpdateIdentityParams struct {
 	IdentityID string
 	Currency   string
 	UpdatedAt  time.Time
 }
 
-func (s *IdentityStorage) Update(ctx context.Context, p UpdateIdentityParams) error {
+func (s IdentityStorage) Update(ctx context.Context, p UpdateIdentityParams) error {
 	sql, args, err := s.Builder.
 		Update("identity_traits").
 		Set("currency", p.Currency).

@@ -16,10 +16,10 @@ import (
 var _ connectpb.IdentityServiceHandler = &IdentityServer{}
 
 type IdentityServer struct {
-	identity *postgres.IdentityStorage
+	identity postgres.IdentityStorage
 }
 
-func NewIdentityServer(id *postgres.IdentityStorage) *IdentityServer {
+func NewIdentityServer(id postgres.IdentityStorage) *IdentityServer {
 	return &IdentityServer{identity: id}
 }
 

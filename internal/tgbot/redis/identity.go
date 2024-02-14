@@ -41,18 +41,13 @@ func (c IdentityCache) Save(ctx context.Context, id model.Identity) error {
 var ErrNotFound = errors.New("entry not found")
 
 func (c IdentityCache) Get(ctx context.Context, tgUID int64) (model.Identity, error) {
-	cmd := c.client.Get(ctx, identityCacheKey(tgUID))
-	if err := cmd.Err(); err != nil {
+	bb, err := c.client.Get(ctx, identityCacheKey(tgUID)).Bytes()
+	if err != nil {
 		if errors.Is(err, redis.Nil) {
 			return model.Identity{}, ErrNotFound
 		}
 
 		return model.Identity{}, fmt.Errorf("redis cmd: %w", err)
-	}
-
-	bb, err := cmd.Bytes()
-	if err != nil {
-		return model.Identity{}, fmt.Errorf("bytes not received from result: %w", err)
 	}
 
 	var id model.Identity

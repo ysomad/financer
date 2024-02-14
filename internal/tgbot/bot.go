@@ -2,6 +2,7 @@ package tgbot
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -11,12 +12,15 @@ import (
 	"connectrpc.com/connect"
 	"github.com/ladydascalie/currency"
 	goredis "github.com/redis/go-redis/v9"
+	"google.golang.org/genproto/googleapis/type/date"
+	googlemoney "google.golang.org/genproto/googleapis/type/money"
 	"gopkg.in/telebot.v3"
 
 	expensev1 "github.com/ysomad/financer/internal/gen/proto/expense/v1"
 	"github.com/ysomad/financer/internal/gen/proto/expense/v1/expensev1connect"
 	pb "github.com/ysomad/financer/internal/gen/proto/telegram/v1"
 	"github.com/ysomad/financer/internal/gen/proto/telegram/v1/telegramv1connect"
+	"github.com/ysomad/financer/internal/money"
 	"github.com/ysomad/financer/internal/tgbot/config"
 	"github.com/ysomad/financer/internal/tgbot/model"
 	"github.com/ysomad/financer/internal/tgbot/redis"
@@ -30,6 +34,7 @@ var messages = map[string]string{
 	"canceled":               "Current operation is canceled",
 	"invalid_expense_format": "Expense must be in format: {?+}{money amount} {expense} {?currency} {?date in format 20.05 or 20.05.1999}",
 	"invalid_date":           "Date must be in format: '20.01.2006' or '20.01.06' or '20.01'",
+	"select_category":        "Select category for the accounted expense",
 }
 
 type IdentityService struct {
@@ -149,10 +154,10 @@ func (b *Bot) CmdSetCurrency(c telebot.Context) error {
 
 	kb := new(telebot.ReplyMarkup)
 
-	btnRUB := kb.Data("🇷🇺 Rubles", "set_currency", "RUB")
-	btnUSD := kb.Data("🇺🇸 Dollars", "set_currency", "USD")
-	btnEUR := kb.Data("🇪🇺 Euros", "set_currency", "EUR")
-	btnCancel := kb.Data("Cancel", "cancel")
+	btnRUB := kb.Data("🇷🇺 Rubles", model.StepCurrencySelection.String(), "RUB")
+	btnUSD := kb.Data("🇺🇸 Dollars", model.StepCurrencySelection.String(), "USD")
+	btnEUR := kb.Data("🇪🇺 Euros", model.StepCurrencySelection.String(), "EUR")
+	btnCancel := kb.Data("Cancel", model.StepCancel.String())
 
 	kb.Inline(
 		kb.Row(btnUSD),
@@ -160,7 +165,7 @@ func (b *Bot) CmdSetCurrency(c telebot.Context) error {
 		kb.Row(btnEUR),
 		kb.Row(btnCancel))
 
-	if err := b.state.Save(ctx, tguid, model.StateCurrencySelection); err != nil {
+	if err := b.state.Save(ctx, tguid, model.State{Step: model.StepCurrencySelection}); err != nil {
 		slog.Error("state not saved", "err", err.Error())
 		return c.Send(messages["internal_error"])
 	}
@@ -181,7 +186,7 @@ func (b *Bot) saveCurrency(ctx context.Context, tguid int64, currCode string) er
 
 	identity, err := b.identity.Cache.Get(ctx, tguid)
 	if err != nil {
-		return fmt.Errorf("identity not found in cache")
+		return fmt.Errorf("identity not found in cache: %w", err)
 	}
 
 	if _, err := b.identity.Client.UpdateIdentity(ctx, withAPIKey(&pb.UpdateIdentityRequest{
@@ -209,8 +214,8 @@ func (b *Bot) HandleText(c telebot.Context) error {
 		return c.Send(messages["internal_error"])
 	}
 
-	switch state {
-	case model.StateCurrencySelection:
+	switch state.Step {
+	case model.StepCurrencySelection:
 		currency := c.Text()
 
 		if err := b.saveCurrency(ctx, tguid, c.Text()); err != nil {
@@ -222,12 +227,12 @@ func (b *Bot) HandleText(c telebot.Context) error {
 		}
 
 		if err := b.state.Del(ctx, tguid); err != nil {
-			slog.Error("state not deleted", "err", err.Error())
+			slog.Error("state not deleted", "err", err.Error(), "tg_uid", tguid)
 		}
 
 		return c.Send(msgCurrencySet(currency))
-	default:
-		_, err := b.authorize(ctx, tguid)
+	default: // handle expenses
+		identity, err := b.authorize(ctx, tguid)
 		if err != nil {
 			slog.Error("identity not found in cache", err)
 			return c.Send(messages["internal_error"])
@@ -245,14 +250,14 @@ func (b *Bot) HandleText(c telebot.Context) error {
 		}
 
 		catType := expensev1.CategoryType_EXPENSES
-		money := strings.ReplaceAll(args[0], "-", "")
+		moneyStr := args[0]
 
-		if strings.HasPrefix(money, "+") {
+		if strings.HasPrefix(moneyStr, "+") {
 			catType = expensev1.CategoryType_EARNINGS
-			money = strings.ReplaceAll(money, "+", "")
+			moneyStr = strings.ReplaceAll(moneyStr, "+", "")
 		}
 
-		expense := args[1]
+		expenseName := args[1]
 		curr := ""
 		date := time.Now()
 
@@ -283,10 +288,67 @@ func (b *Bot) HandleText(c telebot.Context) error {
 			}
 		}
 
-		slog.Debug("EXPENSE", "cat_type", catType, "exp", expense, "curr", curr, "year", date.Year(), "month", date.Month(), "day", date.Day(), "money", money)
-	}
+		slog.Debug("EXPENSE",
+			"cat_type", catType,
+			"exp", expenseName,
+			"curr", curr,
+			"year", date.Year(),
+			"month", date.Month(),
+			"day", date.Day(),
+			"money", moneyStr)
 
-	return nil
+		// TODO: implement pagination
+		res, err := b.category.ListCategories(ctx, withAccessToken(&expensev1.ListCategoriesRequest{
+			Type:     catType,
+			PageSize: 50,
+		}, identity.AccessToken))
+		if err != nil {
+			return fmt.Errorf("b.category.ListCategories: %w", err)
+		}
+
+		slog.Debug("categories listed", "cats", res.Msg.Categories)
+
+		kb := &telebot.ReplyMarkup{}
+		rows := make([]telebot.Row, len(res.Msg.Categories)+1) // +1 for cancel button
+		rows[len(res.Msg.Categories)] = kb.Row(kb.Data("Cancel", model.StepCancel.String()))
+
+		money, err := money.ParseString(moneyStr)
+		if err != nil {
+			return fmt.Errorf("money not parsed: %w", err)
+		}
+
+		expenseData, err := json.Marshal(Expense{
+			Name:     expenseName,
+			Currency: curr,
+			Money:    money,
+			Date:     date,
+		})
+		if err != nil {
+			return fmt.Errorf("expense data not marshaled: %w", err)
+		}
+
+		if err := b.state.Save(ctx, tguid, model.State{
+			Step: model.StepCategorySelection,
+			Data: expenseData,
+		}); err != nil {
+			return fmt.Errorf("state not saved: %w", err)
+		}
+
+		for i, cat := range res.Msg.Categories {
+			rows[i] = kb.Row(kb.Data(cat.Name, model.StepCategorySelection.String(), cat.Name))
+		}
+
+		kb.Inline(rows...)
+
+		return c.Send(messages["select_category"], kb)
+	}
+}
+
+type Expense struct {
+	Date     time.Time
+	Name     string
+	Currency string
+	Money    money.M
 }
 
 func parseDate(s string) (time.Time, error) {
@@ -324,7 +386,7 @@ func (b *Bot) HandleCallback(c telebot.Context) error {
 
 	switch len(cbDataParts) {
 	case 1: // callback without data, only unique preset
-		if cbDataParts[0] == "cancel" {
+		if cbDataParts[0] == model.StepCancel.String() {
 			if err := b.state.Del(ctx, tguid); err != nil {
 				slog.Error("state not deleted on cancel", "err", err.Error())
 			}
@@ -332,12 +394,14 @@ func (b *Bot) HandleCallback(c telebot.Context) error {
 			return c.Edit(messages["canceled"])
 		}
 	case 2: // callback with unique and data
-		if cbDataParts[0] == "set_currency" {
+		unique := cbDataParts[0]
+
+		// set_currency callback
+		if unique == model.StepCurrencySelection.String() {
 			currency := cbDataParts[1]
 
 			if err := b.saveCurrency(ctx, tguid, currency); err != nil {
-				slog.Error("currency not saved", "err", err.Error())
-				return c.Send(messages["internal_error"])
+				return fmt.Errorf("currency not saved: %w", err)
 			}
 
 			if err := b.state.Del(ctx, tguid); err != nil {
@@ -346,9 +410,53 @@ func (b *Bot) HandleCallback(c telebot.Context) error {
 
 			return c.Edit(msgCurrencySet(currency))
 		}
+
+		// select category for expense callback
+		if unique == model.StepCategorySelection.String() {
+			category := cbDataParts[1]
+
+			// TODO: MOVE ACCESS TOKEN TO STATE?!
+			// 2 requests not good
+			state, err := b.state.Get(ctx, tguid)
+			if err != nil {
+				return fmt.Errorf("state not found but must present: %w", err)
+			}
+
+			identity, err := b.identity.Cache.Get(ctx, tguid)
+			if err != nil {
+				return fmt.Errorf("couldnt get identity from cache: %w", err)
+			}
+
+			var expense Expense
+
+			if err := json.Unmarshal(state.Data, &expense); err != nil {
+				return fmt.Errorf("expense not unmarhaled from state: %w", err)
+			}
+
+			_, err = b.expense.DeclareExpense(ctx, withAccessToken(&expensev1.DeclareExpenseRequest{
+				Money: &googlemoney.Money{
+					CurrencyCode: expense.Currency,
+					Units:        expense.Money.Units,
+					Nanos:        expense.Money.Nanos,
+				},
+				Name:     expense.Name,
+				Category: category,
+				Date: &date.Date{
+					Year:  int32(expense.Date.Year()),
+					Month: int32(expense.Date.Month()),
+					Day:   int32(expense.Date.Day()),
+				},
+			}, identity.AccessToken))
+			if err != nil {
+				return fmt.Errorf("expense not declared: %w", err)
+			}
+
+			slog.Debug("CATEGORY SELECT", "parts", cbDataParts)
+
+			return c.Edit(category)
+		}
 	default:
-		slog.Error("unsupported callback", "data", cb.Data)
-		return nil
+		return fmt.Errorf("unsupported callback: %s", cb.Data)
 	}
 
 	return nil
@@ -409,9 +517,9 @@ func (b *Bot) authorize(ctx context.Context, tguid int64) (model.Identity, error
 	}
 
 	identity = model.Identity{
-		ID:          pbIdentity.Id,
-		TGUID:       pbIdentity.TgUid,
-		AccessToken: resp.Msg.AccessToken,
+		ID:          pbIdentity.GetId(),
+		TGUID:       pbIdentity.GetTgUid(),
+		AccessToken: resp.Msg.GetAccessToken(),
 	}
 
 	if err := b.identity.Cache.Save(ctx, identity); err != nil {

@@ -2,6 +2,7 @@ package redis
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -24,20 +25,31 @@ func stateCacheKey(tguid int64) string {
 }
 
 func (c StateCache) Save(ctx context.Context, tguid int64, st model.State) error {
-	return c.client.Set(ctx, stateCacheKey(tguid), string(st), c.ttl).Err()
+	bb, err := json.Marshal(st)
+	if err != nil {
+		return fmt.Errorf("state not marshaled: %w", err)
+	}
+
+	return c.client.Set(ctx, stateCacheKey(tguid), bb, c.ttl).Err()
 }
 
 func (c StateCache) Get(ctx context.Context, tguid int64) (model.State, error) {
-	res, err := c.client.Get(ctx, stateCacheKey(tguid)).Result()
+	bb, err := c.client.Get(ctx, stateCacheKey(tguid)).Bytes()
 	if err != nil {
 		if errors.Is(err, redis.Nil) {
-			return model.StateUnknown, nil
+			return model.State{}, nil
 		}
 
-		return "", err
+		return model.State{}, err
 	}
 
-	return model.State(res), nil
+	var st model.State
+
+	if err := json.Unmarshal(bb, &st); err != nil {
+		return model.State{}, fmt.Errorf("result not unmarshaled: %w", err)
+	}
+
+	return st, nil
 }
 
 func (c StateCache) Del(ctx context.Context, tguid int64) error {

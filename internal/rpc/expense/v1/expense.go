@@ -22,10 +22,14 @@ var _ pbconnect.ExpenseServiceHandler = &ExpenseServer{}
 type ExpenseServer struct {
 	pbconnect.UnimplementedExpenseServiceHandler // TODO: remove after implement
 	expense                                      postgres.ExpenseStorage
+	identity                                     postgres.IdentityStorage
 }
 
-func NewExpenseServer(s postgres.ExpenseStorage) *ExpenseServer {
-	return &ExpenseServer{expense: s}
+func NewExpenseServer(s postgres.ExpenseStorage, i postgres.IdentityStorage) *ExpenseServer {
+	return &ExpenseServer{
+		expense:  s,
+		identity: i,
+	}
 }
 
 var errInvalidCurrencyCode = errors.New("currency code must be valid ISO-4217 code")
@@ -58,21 +62,44 @@ func (s *ExpenseServer) FindExpense(ctx context.Context, r *connect.Request[pb.F
 }
 
 func (s *ExpenseServer) DeclareExpense(ctx context.Context, r *connect.Request[pb.DeclareExpenseRequest]) (*connect.Response[pb.Expense], error) {
+	var (
+		curr = r.Msg.Money.CurrencyCode
+		date time.Time
+		err  error
+	)
+
 	// TODO: move to protovalidate
 	// not empty and valid
-	if !currency.Valid(r.Msg.Money.CurrencyCode) && r.Msg.Money.CurrencyCode != "" {
+	if !currency.Valid(curr) && curr != "" {
 		return nil, connect.NewError(connect.CodeInvalidArgument, errInvalidCurrencyCode)
+	}
+
+	identityID := auth.IdentityID(ctx)
+
+	// use default currency if its not provided
+	if curr == "" {
+		curr, err = s.identity.GetCurrency(ctx, identityID)
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, err)
+		}
+	}
+
+	// if date of expense is not provided
+	if r.Msg.Date.Day == 0 || r.Msg.Date.Month == 0 || r.Msg.Date.Year == 0 {
+		date = time.Now()
+	} else {
+		date = time.Date(int(r.Msg.Date.Year), time.Month(r.Msg.Date.Month), int(r.Msg.Date.Day), 0, 0, 0, 0, time.UTC)
 	}
 
 	p := postgres.SaveExpenseParams{
 		ID:         guid.New("expense"),
-		IdentityID: auth.IdentityID(ctx),
+		IdentityID: identityID,
 		Category:   r.Msg.Category,
 		Name:       r.Msg.Name,
-		Currency:   r.Msg.Money.CurrencyCode,
+		Currency:   curr,
 		MoneyUnits: r.Msg.Money.Units,
 		MoneyNanos: r.Msg.Money.Nanos,
-		Date:       time.Date(int(r.Msg.Date.Year), time.Month(r.Msg.Date.Month), int(r.Msg.Date.Day), 0, 0, 0, 0, time.UTC),
+		Date:       date,
 		CreatedAt:  time.Now(),
 	}
 

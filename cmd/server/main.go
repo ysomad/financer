@@ -105,7 +105,7 @@ func main() {
 	mux.Handle(path, handler)
 
 	// expense service
-	expensesrv := expensev1.NewExpenseServer(expenseStorage)
+	expensesrv := expensev1.NewExpenseServer(expenseStorage, identityStorage)
 	path, handler = expensev1connect.NewExpenseServiceHandler(
 		expensesrv,
 		connect.WithInterceptors(logInterceptor, validateInterceptor, accessTokenInterceptor))

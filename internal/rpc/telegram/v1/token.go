@@ -18,11 +18,11 @@ var _ telegramv1connect.AccessTokenServiceHandler = &AccessTokenServer{}
 const AudTelegram = "TG"
 
 type AccessTokenServer struct {
-	identity *postgres.IdentityStorage
+	identity postgres.IdentityStorage
 	conf     config.AccessToken
 }
 
-func NewAccessTokenServer(id *postgres.IdentityStorage, conf config.AccessToken) *AccessTokenServer {
+func NewAccessTokenServer(id postgres.IdentityStorage, conf config.AccessToken) *AccessTokenServer {
 	return &AccessTokenServer{identity: id, conf: conf}
 }
 

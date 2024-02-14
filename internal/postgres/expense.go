@@ -62,13 +62,14 @@ func (s ExpenseStorage) Save(ctx context.Context, p SaveExpenseParams) error {
 			"date",
 			"created_at").
 		Values(
+			p.ID,
 			p.IdentityID,
-			pgtype.Text{String: p.Category},
+			p.Category,
 			p.Name,
 			p.Currency,
 			p.MoneyUnits,
 			p.MoneyNanos,
-			pgtype.Date{Time: p.Date},
+			p.Date,
 			p.CreatedAt).
 		ToSql()
 	if err != nil {
