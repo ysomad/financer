@@ -31,11 +31,15 @@ func ParseString(s string) (M, error) {
 
 	// money got nanos
 	if len(parts) == 2 {
-		nanosStr := parts[1]
+		sb := &strings.Builder{}
+		sb.Grow(9)
+		sb.WriteString(parts[1])
 
-		for len(nanosStr) < 9 {
-			nanosStr += "0"
+		for sb.Len() < 9 {
+			sb.WriteString("0")
 		}
+
+		nanosStr := sb.String()
 
 		nanos64, err := strconv.ParseInt(nanosStr[:9], 10, 32)
 		if err != nil {

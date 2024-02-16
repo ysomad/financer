@@ -243,6 +243,8 @@ func (b *Bot) HandleText(c telebot.Context) error {
 		args := strings.Split(c.Text(), " ")
 		argsNum := len(args)
 
+		// TODO: SIMPLIFY EXPENSE CREATION (REMOVE DATE
+
 		slog.Debug("ARGS", "ARGS", args)
 
 		if argsNum < 2 {
