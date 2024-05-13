@@ -1,57 +1,136 @@
 package money
 
 import (
-	"errors"
 	"fmt"
 	"strconv"
 	"strings"
 )
 
-type M struct {
-	Units int64
-	Nanos int32
+type FormatConfig struct {
+	Symbol        string
+	Prefix        bool
+	Thousand      string
+	Decimal       string
+	ForceDecimals bool
 }
 
-func ParseString(s string) (M, error) {
-	parts := strings.Split(s, ".")
+type Money int32
 
-	if len(parts) == 0 || len(parts) > 2 {
-		return M{}, errors.New("invalid money format")
+// Parse a string to create a new money value. It can read `XX.YY` and `XX,YY`.
+// An empty string is parsed as zero.
+func Parse(s string) (Money, error) {
+	if len(s) == 0 {
+		return Money(0), nil
 	}
 
-	var (
-		money M
-		err   error
-	)
+	s = strings.Replace(s, ",", ".", -1)
 
-	money.Units, err = strconv.ParseInt(parts[0], 10, 32)
-	if err != nil {
-		return M{}, fmt.Errorf("units not parsed: %w", err)
-	}
-
-	// money got nanos
-	if len(parts) == 2 {
-		sb := &strings.Builder{}
-		sb.Grow(9)
-		sb.WriteString(parts[1])
-
-		for sb.Len() < 9 {
-			sb.WriteString("0")
-		}
-
-		nanosStr := sb.String()
-
-		nanos64, err := strconv.ParseInt(nanosStr[:9], 10, 32)
+	var amount int32
+	switch parts := strings.Split(s, "."); len(parts) {
+	case 1:
+		var err error
+		units, err := strconv.ParseInt(parts[0], 10, 64)
 		if err != nil {
-			return M{}, fmt.Errorf("nanos not parsed: %w", err)
+			return Money(0), err
+		}
+		amount = int32(units) * 100
+
+	case 2:
+		units, err := strconv.ParseInt(parts[0], 10, 64)
+		if err != nil {
+			return Money(0), err
+		}
+		if len(parts[1]) > 2 {
+			parts[1] = parts[1][:2]
+		}
+		decimals, err := strconv.ParseInt(parts[1], 10, 64)
+		if err != nil {
+			return Money(0), err
+		}
+		if len(parts[1]) == 1 {
+			amount = int32(units)*100 + int32(decimals)*10
+		} else {
+			amount = int32(units)*100 + int32(decimals)
 		}
 
-		if money.Units > 0 {
-			money.Nanos = int32(nanos64)
-		} else {
-			money.Nanos = -int32(nanos64)
+	default:
+		return Money(0), fmt.Errorf("cannot parse money value: %v", s)
+	}
+
+	return Money(amount), nil
+}
+
+func (m Money) Format(config FormatConfig) string {
+	if config.Decimal == "" {
+		config.Decimal = "."
+	}
+
+	value := strconv.FormatInt(int64(m), 10)
+	value = fmt.Sprintf("%03v", value)
+	if config.Thousand != "" {
+		for i := len(value) - 5; i > 0; i -= 3 {
+			value = value[:i] + config.Thousand + value[i:]
 		}
 	}
 
-	return money, nil
+	value = value[:len(value)-2] + config.Decimal + value[len(value)-2:]
+
+	if config.Symbol != "" {
+		if config.Prefix {
+			value = config.Symbol + value
+		} else {
+			value = value + " " + config.Symbol
+		}
+	}
+
+	if !config.ForceDecimals {
+		value = strings.TrimSuffix(value, config.Decimal+"00")
+	}
+
+	return value
+}
+
+// Format the money value with the default configuration
+func (m Money) String() string {
+	return m.Format(FormatConfig{})
+}
+
+// Cents returns the value with cents precision (2 decimal places) as a number.
+func (m Money) Cents() int32 {
+	return int32(m)
+}
+
+// IsZero returns true if there is no money.
+func (m Money) IsZero() bool {
+	return m == 0
+}
+
+// LessThan returns true if a money value is less than the other.
+func (m Money) LessThan(other Money) bool {
+	return m < other
+}
+
+// Mul multiplies the money value n times and returns the result.
+func (m Money) Mul(n int32) Money {
+	return Money(int32(m) * n)
+}
+
+// Add two money values together and returns the result.
+func (m Money) Add(other Money) Money {
+	return Money(int32(m) + int32(other))
+}
+
+// Sub subtracts two money values and returns the result.
+func (m Money) Sub(other Money) Money {
+	return Money(int32(m) - int32(other))
+}
+
+// Div divides two money values and returns the result.
+func (m Money) Div(other Money) Money {
+	return Money(int32(m) / int32(other))
+}
+
+// AddTaxPercent adds a percentage of the price to itself.
+func (m Money) AddTaxPercent(tax int32) Money {
+	return m.Mul(tax).Div(Money(100)).Add(m)
 }

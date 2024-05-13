@@ -5,34 +5,17 @@ export GOOSE_DRIVER=postgres
 export GOOSE_DBSTRING=${PG_URL}
 
 .PHONY:
-generate:
-	rm -rf internal/gen/proto/
-	buf generate proto/
-
-.PHONY:
 run:
 	go mod tidy && go mod download && \
-	go run ./cmd/tgbot \
-	go run ./cmd/server
+	pplog go run ./cmd
 
-
-.PHONY:
-run-bot:
+.PHONY: run-migrate
+run-migrate:
 	go mod tidy && go mod download && \
-	go run ./cmd/tgbot
+	pplog go run ./cmd -migrate
 
-.PHONY:
-run-server:
-	go mod tidy && go mod download && \
-	go run ./cmd/server
-
-.PHONY: run-server-migrate
-run-server-migrate:
-	go mod tidy && go mod download && \
-	go run ./cmd/server -migrate
-
-.PHONY: dry-run-server
-dry-run-server: goose-reset run-server-migrate
+.PHONY: dry-run
+dry-run: goose-reset run-migrate
 
 .PHONY: compose-up
 compose-up:

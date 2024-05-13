@@ -1,7 +1,0 @@
-log_level = "debug"
-port = "8080"
-
-[access_token]
-ttl = "24h"
-
-

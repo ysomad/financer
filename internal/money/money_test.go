@@ -1,155 +1,184 @@
 package money
 
 import (
+	"fmt"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func TestParseString(t *testing.T) {
-	type args struct {
-		s string
-	}
-	tests := map[string]struct {
-		args    args
-		want    M
-		wantErr bool
-	}{
-		"float1": {
-			args: args{"50.32"},
-			want: M{
-				Units: 50,
-				Nanos: 320_000_000,
-			},
-			wantErr: false,
-		},
-		"float2": {
-			args: args{"33.2"},
-			want: M{
-				Units: 33,
-				Nanos: 200_000_000,
-			},
-			wantErr: false,
-		},
-		"float3": {
-			args: args{"155.07"},
-			want: M{
-				Units: 155,
-				Nanos: 70_000_000,
-			},
-			wantErr: false,
-		},
-		"float4": {
-			args: args{"155.7"},
-			want: M{
-				Units: 155,
-				Nanos: 700_000_000,
-			},
-			wantErr: false,
-		},
+func TestParse(t *testing.T) {
+	money, err := Parse("125,79")
+	require.NoError(t, err)
 
-		"neg_float1": {
-			args: args{"-155.07"},
-			want: M{
-				Units: -155,
-				Nanos: -70_000_000,
-			},
-			wantErr: false,
-		},
-		"neg_float2": {
-			args: args{"-55.55"},
-			want: M{
-				Units: -55,
-				Nanos: -550_000_000,
-			},
-			wantErr: false,
-		},
-		"zero_float1": {
-			args: args{"00.00"},
-			want: M{
-				Units: 0,
-				Nanos: 0,
-			},
-			wantErr: false,
-		},
-		"zero_float2": {
-			args: args{"0.0"},
-			want: M{
-				Units: 0,
-				Nanos: 0,
-			},
-			wantErr: false,
-		},
-		"zero_float3": {
-			args: args{"0.00"},
-			want: M{
-				Units: 0,
-				Nanos: 0,
-			},
-			wantErr: false,
-		},
-		"int1": {
-			args: args{"5"},
-			want: M{
-				Units: 5,
-				Nanos: 0,
-			},
-			wantErr: false,
-		},
-		"int2": {
-			args: args{"325"},
-			want: M{
-				Units: 325,
-				Nanos: 0,
-			},
-			wantErr: false,
-		},
-		"int3": {
-			args: args{"1667"},
-			want: M{
-				Units: 1667,
-				Nanos: 0,
-			},
-			wantErr: false,
-		},
-		"neg_int1": {
-			args: args{"-5"},
-			want: M{
-				Units: -5,
-				Nanos: 0,
-			},
-			wantErr: false,
-		},
-		"neg_int2": {
-			args: args{"-325"},
-			want: M{
-				Units: -325,
-				Nanos: 0,
-			},
-			wantErr: false,
-		},
-		"neg_int3": {
-			args: args{"-1667"},
-			want: M{
-				Units: -1667,
-				Nanos: 0,
-			},
-			wantErr: false,
-		},
-		"zero_int": {
-			args: args{"0"},
-			want: M{
-				Units: 0,
-				Nanos: 0,
-			},
-			wantErr: false,
-		},
+	require.EqualValues(t, money, 12579)
+}
+
+func TestParseMultipleDecimals(t *testing.T) {
+	money, err := Parse("125.7923")
+	require.NoError(t, err)
+
+	require.EqualValues(t, money, 12579)
+}
+
+func TestParseMultipleDecimalsNoRound(t *testing.T) {
+	money, err := Parse("125.7963")
+	require.NoError(t, err)
+
+	require.EqualValues(t, money, 12579)
+}
+
+func TestParseFloatError(t *testing.T) {
+	money, err := Parse("10.03")
+	require.NoError(t, err)
+
+	require.EqualValues(t, money, 1003)
+}
+
+func TestParseOneDecimal(t *testing.T) {
+	money, err := Parse("10.3")
+	require.NoError(t, err)
+
+	require.EqualValues(t, money, 1030)
+}
+
+func TestParseOneDecimalWithZero(t *testing.T) {
+	money, err := Parse("10.30")
+	require.NoError(t, err)
+
+	require.EqualValues(t, money, 1030)
+}
+
+func TestParseFloatErrorIterative(t *testing.T) {
+	for i := 1000; i <= 9999; i++ {
+		var prefix string
+		if i%100 < 10 {
+			prefix = "0"
+		}
+		s := fmt.Sprintf("%v.%s%v", i/100, prefix, i%100)
+		money, err := Parse(s)
+		require.NoError(t, err)
+
+		require.EqualValues(t, money, i, "i: %v; s: %v", i, s)
 	}
-	for name, tt := range tests {
-		t.Run(name, func(t *testing.T) {
-			got, err := ParseString(tt.args.s)
-			assert.Equal(t, tt.wantErr, (err != nil))
-			assert.Equal(t, tt.want, got)
-		})
+}
+
+func TestParseWithoutDecimals(t *testing.T) {
+	money, err := Parse("10")
+	require.NoError(t, err)
+
+	require.EqualValues(t, money, 1000)
+}
+
+func TestFormatDefault(t *testing.T) {
+	money := Money(12345)
+
+	require.EqualValues(t, money.Format(FormatConfig{}), "123.45")
+}
+
+func TestFormatSymbol(t *testing.T) {
+	money := Money(12345)
+
+	require.EqualValues(t, money.Format(FormatConfig{
+		Symbol:        "€",
+		Thousand:      ",",
+		ForceDecimals: false,
+	}), "123.45 €")
+}
+
+func TestFormatSymbolPrefix(t *testing.T) {
+	money := Money(12345)
+
+	require.EqualValues(t, money.Format(FormatConfig{
+		Symbol:   "$",
+		Prefix:   true,
+		Thousand: ",",
+	}), "$123.45")
+}
+
+func TestFormatNegativeSymbolPrefix(t *testing.T) {
+	money := Money(-12345)
+
+	cnf := FormatConfig{
+		Symbol: "$",
+		Prefix: true,
 	}
+	require.EqualValues(t, money.Format(cnf), "$-123.45")
+}
+
+func TestFormatThousand(t *testing.T) {
+	money := Money(123456)
+
+	require.EqualValues(t, money.Format(FormatConfig{
+		Symbol:        "€",
+		Thousand:      ",",
+		ForceDecimals: false,
+	}), "1,234.56 €")
+}
+
+func TestFormatCents(t *testing.T) {
+	money := Money(12)
+
+	require.EqualValues(t, money.Format(FormatConfig{}), "0.12")
+}
+
+func TestFormatZeroDecimals(t *testing.T) {
+	money := Money(100)
+
+	require.EqualValues(t, money.Format(FormatConfig{}), "1")
+}
+
+func TestFormatForceDecimals(t *testing.T) {
+	money := Money(100)
+
+	cnf := FormatConfig{
+		ForceDecimals: true,
+	}
+	require.EqualValues(t, money.Format(cnf), "1.00")
+}
+
+func TestLessThan(t *testing.T) {
+	money := Money(10000)
+	other := Money(5000)
+
+	require.False(t, money.LessThan(other))
+	require.True(t, other.LessThan(money))
+}
+
+func TestIsZero(t *testing.T) {
+	money := Money(0)
+	require.True(t, money.IsZero())
+
+	money = Money(1)
+	require.False(t, money.IsZero())
+}
+
+func TestMul(t *testing.T) {
+	money := Money(1000)
+
+	require.EqualValues(t, money.Mul(3), 3000)
+}
+
+func TestAdd(t *testing.T) {
+	money := Money(10000)
+
+	require.EqualValues(t, money.Add(Money(5000)), 15000)
+}
+
+func TestSub(t *testing.T) {
+	money := Money(10000)
+
+	require.EqualValues(t, money.Sub(Money(4000)), 6000)
+}
+
+func TestDiv(t *testing.T) {
+	money := Money(1234)
+
+	require.EqualValues(t, money.Div(Money(2)), int32(617))
+}
+
+func TestAddTaxPercent(t *testing.T) {
+	money := Money(10000)
+
+	require.EqualValues(t, money.AddTaxPercent(20), 12000)
 }

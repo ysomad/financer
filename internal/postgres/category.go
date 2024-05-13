@@ -3,13 +3,11 @@ package postgres
 import (
 	"context"
 	"fmt"
-	"log/slog"
-	"time"
 
 	sq "github.com/Masterminds/squirrel"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/ysomad/financer/internal/paging"
+	"github.com/ysomad/financer/internal/domain"
 	"github.com/ysomad/financer/internal/postgres/pgclient"
 )
 
@@ -17,86 +15,62 @@ type CategoryStorage struct {
 	*pgclient.Client
 }
 
-func NewCategoryStorage(c *pgclient.Client) CategoryStorage {
-	return CategoryStorage{c}
+type category struct {
+	ID     string      `db:"id"`
+	Name   string      `db:"name"`
+	Type   string      `db:"type"`
+	Author pgtype.Int8 `db:"author"`
 }
 
-type GetAllCategoriesParams struct {
-	IdentityID   string
-	SearchQuery  string
-	CategoryType string
-	PageSize     int32
-	PageToken    string
-}
-
-type Category struct {
-	Name      string      `db:"name"`
-	Type      string      `db:"type"`
-	Author    pgtype.Text `db:"author"`
-	CreatedAt time.Time   `db:"created_at"`
-}
-
-type CategoryList struct {
-	Categories    []Category
-	NextPageToken string
-}
-
-func (s CategoryStorage) GetAll(ctx context.Context, p GetAllCategoriesParams) (CategoryList, error) {
+func (s CategoryStorage) ListByUserID(ctx context.Context, uid int64, catType domain.CatType) ([]category, error) {
 	b := s.Builder.
-		Select("c.name name, c.type type, c.author author, c.created_at created_at").
-		From("identity_categories ic").
-		InnerJoin("categories c ON ic.category = c.name").
-		Where(sq.Eq{"ic.identity_id": p.IdentityID}).
-		Where(sq.Eq{"c.deleted_at": nil}).
-		OrderBy("c.created_at", "c.name").
-		Limit(uint64(p.PageSize) + 1)
+		Select("c.id id, c.name name, c.type type, c.author author").
+		From("user_categories uc").
+		InnerJoin("categories c ON uc.category_id = c.id").
+		Where(sq.Eq{"uc.user_id": uid}).
+		Where(sq.Eq{"c.deleted_at": nil})
 
-	if p.CategoryType != "" {
-		b = b.Where(sq.Eq{"c.type": p.CategoryType})
-	}
-
-	if p.SearchQuery != "" {
-		// fulltext search using PGroonga https://pgroonga.github.io
-		b = b.Where(sq.Expr("c.name &@ ?", p.SearchQuery))
-	}
-
-	if p.PageToken != "" {
-		prevName, prevTime, err := paging.Token(p.PageToken).Decode()
-		if err != nil {
-			return CategoryList{}, fmt.Errorf("page token not decoded: %w", err)
-		}
-
-		b = b.Where(sq.And{
-			sq.GtOrEq{"c.created_at": prevTime},
-			sq.GtOrEq{"c.name": prevName},
-		})
+	if catType != domain.CatTypeUnspecified {
+		b = b.Where(sq.Eq{"c.type": catType})
 	}
 
 	sql, args, err := b.ToSql()
 	if err != nil {
-		return CategoryList{}, err
+		return nil, err
 	}
-
-	slog.Debug("list categorues query", "q", sql)
 
 	rows, err := s.Pool.Query(ctx, sql, args...)
 	if err != nil {
-		return CategoryList{}, err
+		return nil, fmt.Errorf("query: %w", err)
 	}
 
-	cats, err := pgx.CollectRows(rows, pgx.RowToStructByName[Category])
+	cats, err := pgx.CollectRows(rows, pgx.RowToStructByName[category])
 	if err != nil {
-		return CategoryList{}, fmt.Errorf("rows not collected: %w", err)
+		return nil, fmt.Errorf("scan: %w", err)
 	}
 
-	list := CategoryList{Categories: cats}
-	totalCats := len(cats)
+	return cats, nil
+}
 
-	// has next page
-	if totalCats == int(p.PageSize)+1 {
-		list.Categories = cats[:totalCats-1]
-		list.NextPageToken = paging.NewToken(cats[totalCats-1].Name, cats[totalCats-1].CreatedAt).String()
+func (s CategoryStorage) FindByID(ctx context.Context, catID string) (category, error) {
+	sql, args, err := s.Builder.
+		Select("id, name, type, author").
+		From("categories").
+		Where(sq.Eq{"id": catID}).
+		ToSql()
+	if err != nil {
+		return category{}, err
 	}
 
-	return list, nil
+	rows, err := s.Pool.Query(ctx, sql, args...)
+	if err != nil {
+		return category{}, fmt.Errorf("query: %w", err)
+	}
+
+	cat, err := pgx.CollectOneRow(rows, pgx.RowToStructByName[category])
+	if err != nil {
+		return category{}, fmt.Errorf("scan: %w", err)
+	}
+
+	return cat, nil
 }

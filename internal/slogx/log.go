@@ -6,8 +6,8 @@ import (
 	"strings"
 )
 
-func Fatal(msg string, err error) {
-	slog.Error(msg, "err", err.Error())
+func Fatal(msg string, args ...any) {
+	slog.Error(msg, args...)
 	os.Exit(1)
 }
 

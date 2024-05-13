@@ -1,0 +1,5 @@
+log_level = "debug"
+verbose = false
+
+[postgres]
+max_conns = 5
