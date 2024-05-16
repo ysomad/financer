@@ -16,7 +16,7 @@ type KeywordStorage struct {
 	*pgclient.Client
 }
 
-func (s KeywordStorage) FindCategory(ctx context.Context, uid int64, opName string, ct domain.CatType) (category, error) {
+func (s KeywordStorage) FindCategory(ctx context.Context, uid int64, opName string, ct domain.CatType) (Category, error) {
 	sql, args, err := s.Builder.
 		Select("c.id id, c.name name, c.author author, c.type type").
 		From("user_keywords uk").
@@ -26,21 +26,21 @@ func (s KeywordStorage) FindCategory(ctx context.Context, uid int64, opName stri
 		Where(sq.Eq{"c.type": ct}).
 		ToSql()
 	if err != nil {
-		return category{}, err
+		return Category{}, err
 	}
 
 	rows, err := s.Pool.Query(ctx, sql, args...)
 	if err != nil {
-		return category{}, fmt.Errorf("query: %w", err)
+		return Category{}, fmt.Errorf("query: %w", err)
 	}
 
-	cat, err := pgx.CollectExactlyOneRow(rows, pgx.RowToStructByName[category])
+	cat, err := pgx.CollectExactlyOneRow(rows, pgx.RowToStructByName[Category])
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return category{}, ErrNotFound
+			return Category{}, ErrNotFound
 		}
 
-		return category{}, fmt.Errorf("scan: %w", err)
+		return Category{}, fmt.Errorf("scan: %w", err)
 	}
 
 	return cat, nil

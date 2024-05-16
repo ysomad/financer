@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/jackc/pgerrcode"
@@ -60,6 +61,7 @@ func (s OperationStorage) Save(ctx context.Context, p SaveOperationParams) error
 
 			// do not save same keyword again
 			if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation {
+				slog.InfoContext(ctx, "skip keyword save", "original", err.Error(), "keyword", p.Operation)
 				return nil
 			}
 

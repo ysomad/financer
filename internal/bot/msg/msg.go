@@ -12,11 +12,18 @@ const (
 	// steps
 	CurrencySelection
 	CurrencySaved
+
 	LanguageSelection
 	LanguageSaved
+
 	CategorySelection
 	ExpenseSaved
 	IncomeSaved
+
+	CategoryTypeSelection
+	CategoryRenameSelection
+	CategoryRename
+	CategoryRenamed
 
 	// logic errors
 	InvalidCurrency
@@ -34,6 +41,8 @@ const (
 	BtnRussian
 	BtnEnglish
 	BtnOther
+	BtnIncome
+	BtnExpenses
 )
 
 var messages = map[Type]map[string]string{
@@ -76,6 +85,22 @@ var messages = map[Type]map[string]string{
 		"ru": "Заработано <b>%s %s</b> в категории %s\n\n<i>%s</i>",
 		"en": "Earned <b>%s %s</b> in %s category\n\n<i>%s</i>",
 	},
+	CategoryTypeSelection: {
+		"ru": "Категорию расходов или доходов хочешь переименовать?",
+		"en": "Category of expenses or income would like to rename?",
+	},
+	CategoryRenameSelection: {
+		"ru": "Какую категорию хочешь переименовать?",
+		"en": "Which category you want to rename?",
+	},
+	CategoryRename: {
+		"ru": "Как теперь будет называться категория <b>%s</b>?",
+		"en": "What will <b>%s</b> category be called now?",
+	},
+	CategoryRenamed: {
+		"ru": "Категория <b>%s</b> переименована в <b>%s</b>",
+		"en": "Category <b>%s</b> renamed to <b>%s</b>",
+	},
 
 	// Logic errors
 	InvalidCurrency: {
@@ -83,6 +108,7 @@ var messages = map[Type]map[string]string{
 		"en": "Invalid currency format, provide currency code in ISO-4217 format",
 	},
 
+	// Message titles
 	ExpenseCategoriesTitle: {
 		"ru": "➖ Категории расходов",
 		"en": "➖ Expense categories",
@@ -124,6 +150,14 @@ var messages = map[Type]map[string]string{
 	BtnOther: {
 		"ru": "🤷 Другое",
 		"en": "🤷 Other",
+	},
+	BtnIncome: {
+		"ru": "📈 Доходы",
+		"en": "📈 Income",
+	},
+	BtnExpenses: {
+		"ru": "📉 Расходы",
+		"en": "📉 Expenses",
 	},
 }
 

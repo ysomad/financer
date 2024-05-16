@@ -118,6 +118,7 @@ func main() {
 	tbot.Handle("/categories", b.ListCategories)
 	tbot.Handle("/set_lang", b.SetLanguage)
 	tbot.Handle("/set_currency", b.SetCurrency)
+	tbot.Handle("/rename_category", b.RenameCategory)
 
 	tbot.Handle(tele.OnCallback, b.HandleCallback)
 	tbot.Handle(tele.OnText, b.HandleText)

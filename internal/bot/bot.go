@@ -43,6 +43,10 @@ func New(st *expirable.LRU[string, domain.State], cat postgres.CategoryStorage,
 	}
 }
 
+func btnCancel(kb *tele.ReplyMarkup, lang string) tele.Btn {
+	return kb.Data(msg.Get(msg.BtnCancel, lang), domain.StepCancel.String())
+}
+
 func (b *Bot) Start(c tele.Context) error {
 	/*
 		1 Спросить валюту и язык по умолчанию
@@ -81,7 +85,7 @@ func (b *Bot) ListCategories(c tele.Context) error {
 	}
 
 	for _, cat := range cats {
-		if cat.Type != domain.CatTypeExpense {
+		if cat.Type != domain.CatTypeExpenses {
 			continue
 		}
 		if _, err := sb.WriteString(fmt.Sprintf("%s\n", cat.Name)); err != nil {
@@ -105,6 +109,29 @@ func (b *Bot) ListCategories(c tele.Context) error {
 	return c.Send(sb.String())
 }
 
+func (b *Bot) RenameCategory(c tele.Context) error {
+	usr, ok := userFromContext(c)
+	if !ok {
+		return errUserNotInContext
+	}
+
+	kb := &tele.ReplyMarkup{}
+	step := domain.StepCategoryTypeSelection
+
+	btnIncome := kb.Data(msg.Get(msg.BtnIncome, usr.Language), step.String(), domain.CatTypeIncome.String())
+	btnExpenses := kb.Data(msg.Get(msg.BtnExpenses, usr.Language), step.String(), domain.CatTypeExpenses.String())
+
+	kb.Inline(
+		kb.Row(btnIncome),
+		kb.Row(btnExpenses),
+		kb.Row(btnCancel(kb, usr.Language)),
+	)
+
+	b.state.Add(usr.IDString(), domain.State{Step: step})
+
+	return c.Send(msg.Get(msg.CategoryTypeSelection, usr.Language), kb)
+}
+
 func (b *Bot) SetLanguage(c tele.Context) error {
 	usr, ok := userFromContext(c)
 	if !ok {
@@ -116,12 +143,11 @@ func (b *Bot) SetLanguage(c tele.Context) error {
 
 	btnRus := kb.Data(msg.Get(msg.BtnRussian, usr.Language), step.String(), "ru")
 	btnEng := kb.Data(msg.Get(msg.BtnEnglish, usr.Language), step.String(), "en")
-	btnCancel := kb.Data(msg.Get(msg.BtnCancel, usr.Language), domain.StepCancel.String())
 
 	kb.Inline(
 		kb.Row(btnRus),
 		kb.Row(btnEng),
-		kb.Row(btnCancel),
+		kb.Row(btnCancel(kb, usr.Language)),
 	)
 
 	b.state.Add(usr.IDString(), domain.State{Step: step})
@@ -141,13 +167,12 @@ func (b *Bot) SetCurrency(c tele.Context) error {
 	btnRUB := kb.Data(msg.Get(msg.BtnRUB, usr.Language), step.String(), "RUB")
 	btnUSD := kb.Data(msg.Get(msg.BtnUSD, usr.Language), step.String(), "USD")
 	btnEUR := kb.Data(msg.Get(msg.BtnEUR, usr.Language), step.String(), "EUR")
-	btnCancel := kb.Data(msg.Get(msg.BtnCancel, usr.Language), domain.StepCancel.String())
 
 	kb.Inline(
 		kb.Row(btnUSD),
 		kb.Row(btnRUB),
 		kb.Row(btnEUR),
-		kb.Row(btnCancel),
+		kb.Row(btnCancel(kb, usr.Language)),
 	)
 
 	b.state.Add(usr.IDString(), domain.State{Step: step})
@@ -186,6 +211,37 @@ func (b *Bot) HandleText(c tele.Context) error {
 		}
 
 		return c.Send(msg.Getf(msg.CurrencySaved, usr.Language, usr.Currency, usr.Currency))
+	case domain.StepCategoryRename:
+		defer b.state.Remove(usr.IDString())
+
+		cat, ok := state.Data.(postgres.Category)
+		if !ok {
+			return fmt.Errorf("category rename: %w", errInvalidStateData)
+		}
+
+		newCatName := c.Text()
+		newCatID := uuid.NewString()
+
+		// TODO: wrap into tx
+		if err := b.category.Save(ctx, postgres.SaveCategoryParams{
+			ID:        newCatID,
+			Name:      newCatName,
+			Type:      cat.Type,
+			Author:    usr.ID,
+			CreatedAt: time.Now(),
+		}); err != nil {
+			return fmt.Errorf("category not saved: %w", err)
+		}
+
+		if err := b.category.Replace(ctx, postgres.ReplaceCategoryParams{
+			UID:   usr.ID,
+			OldID: cat.ID,
+			NewID: newCatID,
+		}); err != nil {
+			return fmt.Errorf("category not replaced: %w", err)
+		}
+
+		return c.Send(msg.Getf(msg.CategoryRenamed, usr.Language, cat.Name, newCatName))
 	default:
 		// handle operation save
 		parts := strings.Split(c.Text(), " ")
@@ -227,7 +283,7 @@ func (b *Bot) HandleText(c tele.Context) error {
 			opName = strings.Join(parts[1:last], " ")
 		}
 
-		catType := domain.CatTypeExpense
+		catType := domain.CatTypeExpenses
 
 		if money > 0 {
 			catType = domain.CatTypeIncome
@@ -262,7 +318,7 @@ func (b *Bot) HandleText(c tele.Context) error {
 
 		step := domain.StepCategorySelection
 
-		kb, err := b.categoriesKeyboard(ctx, usr, step, domain.CatType(catType))
+		kb, err := b.categoriesKeyboard(ctx, usr, step, domain.CatType(catType), true)
 		if err != nil {
 			return fmt.Errorf("")
 		}
@@ -281,7 +337,7 @@ func (b *Bot) HandleText(c tele.Context) error {
 }
 
 // categoriesKeyboard builds inline keyboard with categories.
-func (b *Bot) categoriesKeyboard(ctx context.Context, usr domain.User, step domain.Step, ct domain.CatType) (*tele.ReplyMarkup, error) {
+func (b *Bot) categoriesKeyboard(ctx context.Context, usr domain.User, nextStep domain.Step, ct domain.CatType, other bool) (*tele.ReplyMarkup, error) {
 	// Ask for category select (only if operation with the same name not found)
 	cats, err := b.category.ListByUserID(ctx, usr.ID, ct)
 	if err != nil {
@@ -295,7 +351,7 @@ func (b *Bot) categoriesKeyboard(ctx context.Context, usr domain.User, step doma
 	var tmp tele.Btn
 
 	for i, cat := range cats {
-		btn := kb.Data(cat.Name, step.String(), cat.ID)
+		btn := kb.Data(cat.Name, nextStep.String(), cat.ID)
 
 		// maximum 5 buttons in one column, optimal for mobile devices
 		if len(cats) <= 5 {
@@ -311,11 +367,12 @@ func (b *Bot) categoriesKeyboard(ctx context.Context, usr domain.User, step doma
 		btnRows = append(btnRows, []tele.Btn{tmp, btn})
 	}
 
-	btnOther := kb.Data(msg.Get(msg.BtnOther, usr.Language), step.String(), domain.OtherCategoryID)
-	btnCancel := kb.Data(msg.Get(msg.BtnCancel, usr.Language), domain.StepCancel.String())
+	if other {
+		btnOther := kb.Data(msg.Get(msg.BtnOther, usr.Language), nextStep.String(), domain.OtherCategoryID)
+		btnRows = append(btnRows, kb.Row(btnOther))
+	}
 
-	btnRows = append(btnRows, kb.Row(btnOther))
-	btnRows = append(btnRows, kb.Row(btnCancel))
+	btnRows = append(btnRows, kb.Row(btnCancel(kb, usr.Language)))
 
 	kb.Inline(btnRows...)
 
@@ -399,6 +456,27 @@ func (b *Bot) HandleCallback(c tele.Context) error {
 		}
 
 		return c.Edit(msg.Getf(msg.ExpenseSaved, usr.Language, op.money.String(), usr.Currency, cat.Name, op.name))
+	case domain.StepCategoryTypeSelection.String():
+		kb, err := b.categoriesKeyboard(ctx, usr, domain.StepCategoryRenameSelection, domain.CatType(cb.data), false)
+		if err != nil {
+			return fmt.Errorf("categories keyboard in callback: %w", err)
+		}
+
+		b.state.Add(usr.IDString(), domain.State{Step: domain.StepCategoryRenameSelection})
+
+		return c.Edit(msg.Get(msg.CategoryRenameSelection, usr.Language), kb)
+	case domain.StepCategoryRenameSelection.String():
+		cat, err := b.category.FindByID(ctx, cb.data)
+		if err != nil {
+			return fmt.Errorf("category not found on category rename: %w", err)
+		}
+
+		b.state.Add(usr.IDString(), domain.State{
+			Step: domain.StepCategoryRename,
+			Data: cat,
+		})
+
+		return c.Edit(msg.Getf(msg.CategoryRename, usr.Language, cat.Name))
 	case domain.StepCurrencySelection.String():
 		defer b.state.Remove(usr.IDString())
 
