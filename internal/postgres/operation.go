@@ -22,7 +22,7 @@ type SaveOperationParams struct {
 	ID        string
 	UID       int64
 	CatID     string
-	Name      string
+	Operation string
 	Currency  string
 	Money     money.Money
 	OccuredAt time.Time
@@ -34,7 +34,7 @@ func (s OperationStorage) Save(ctx context.Context, p SaveOperationParams) error
 		Insert("operations").
 		Columns("id, user_id, category_id, name",
 			"currency, money, occured_at, created_at").
-		Values(p.ID, p.UID, p.CatID, p.Name,
+		Values(p.ID, p.UID, p.CatID, p.Operation,
 			p.Currency, p.Money, p.OccuredAt, p.CreatedAt).
 		ToSql()
 	if err != nil {
@@ -44,7 +44,7 @@ func (s OperationStorage) Save(ctx context.Context, p SaveOperationParams) error
 	sql2, args2, err := s.Builder.
 		Insert("user_keywords").
 		Columns("user_id, category_id, operation").
-		Values(p.UID, p.CatID, p.Name).
+		Values(p.UID, p.CatID, p.Operation).
 		ToSql()
 	if err != nil {
 		return err

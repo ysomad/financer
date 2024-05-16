@@ -16,10 +16,10 @@ type CategoryStorage struct {
 }
 
 type category struct {
-	ID     string      `db:"id"`
-	Name   string      `db:"name"`
-	Type   string      `db:"type"`
-	Author pgtype.Int8 `db:"author"`
+	ID     string         `db:"id"`
+	Name   string         `db:"name"`
+	Type   domain.CatType `db:"type"`
+	Author pgtype.Int8    `db:"author"`
 }
 
 func (s CategoryStorage) ListByUserID(ctx context.Context, uid int64, catType domain.CatType) ([]category, error) {

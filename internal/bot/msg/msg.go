@@ -53,8 +53,8 @@ var messages = map[Type]map[string]string{
 		"en": "Choose from list or send any other currency in ISO-4217 format (for example UAH, KZT, GBP etc)",
 	},
 	CurrencySaved: {
-		"ru": "<b>%s</b> сохранена как валюта по умолчанию. Для следующей команды без указания валюты я буду использовать <b>%s</b>\n\nТы всегда можешь изменить валюту по умолчанию командой /set_currency",
-		"en": "<b>%s</b> saved as your default currency. Next time you send me a command without specifying currency I'll use <b>%s</b>\n\nYou can always change default currency by using /set_currency command",
+		"ru": "<b>%s</b> сохранена как валюта по умолчанию, для следующей команды без указания валюты я буду использовать <b>%s</b>",
+		"en": "<b>%s</b> saved as your default currency, next time you send me a command without specifying currency I'll use <b>%s</b>",
 	},
 	CategorySelection: {
 		"ru": "Выбери категорию расхода или дохода для учета",

@@ -1,6 +1,7 @@
 package bot
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -186,26 +187,17 @@ func (b *Bot) HandleText(c tele.Context) error {
 
 		return c.Send(msg.Getf(msg.CurrencySaved, usr.Language, usr.Currency, usr.Currency))
 	default:
-		// +133 магдонолс 20.05
-		// 14 такси вчера (используется валюта по умолчанию)
-		// 7 taxi yesterday
-		// 99 taxi two days ago
-		// 43 метро gel 20.05.1999
-		// 43 метро
-
-		// вчера, позавчера, 20.05, 20.05.1999
-
-		args := strings.Split(c.Text(), " ")
-		if len(args) < 2 {
+		// handle operation save
+		parts := strings.Split(c.Text(), " ")
+		if len(parts) < 2 {
 			return c.Send(msg.Get(msg.InvalidOperationFormat, usr.Language))
 		}
 
-		moneyStr := strings.ReplaceAll(args[0], "-", "")
-		catType := domain.CatTypeExpense
+		moneyStr := parts[0]
 
-		if strings.HasPrefix(moneyStr, "+") {
-			moneyStr = strings.TrimPrefix(moneyStr, "+")
-			catType = domain.CatTypeIncome
+		// костыль
+		if !strings.Contains(moneyStr, "-") && !strings.Contains(moneyStr, "+") {
+			moneyStr = "-" + moneyStr
 		}
 
 		money, err := money.Parse(moneyStr)
@@ -213,32 +205,42 @@ func (b *Bot) HandleText(c tele.Context) error {
 			return c.Send(msg.Get(msg.InvalidOperationFormat, usr.Language))
 		}
 
+		if money == 0 {
+			return c.Send(msg.Get(msg.InvalidOperationFormat, usr.Language))
+		}
+
 		occuredAt := time.Now()
-		opName := args[1]
+		opName := parts[1]
 
 		// parse date from last argument
-		last := len(args) - 1
+		last := len(parts) - 1
 
-		if len(args) > 2 {
-			tmpDate, err := date.Parse(args[last])
+		if len(parts) > 2 {
+			tmpDate, err := date.Parse(parts[last])
 			if err != nil {
-				slog.InfoContext(ctx, "date not parsed", "input", args[last])
+				slog.InfoContext(ctx, "date not parsed", "input", parts[last])
 				last++
 			} else {
 				occuredAt = tmpDate
 			}
 
-			opName = strings.Join(args[1:last], " ")
+			opName = strings.Join(parts[1:last], " ")
+		}
+
+		catType := domain.CatTypeExpense
+
+		if money > 0 {
+			catType = domain.CatTypeIncome
 		}
 
 		// find operation with the same name
-		cat, err := b.keyword.FindCategory(ctx, usr.ID, opName)
+		cat, err := b.keyword.FindCategory(ctx, usr.ID, opName, catType)
 		if err == nil {
 			err := b.operation.Save(ctx, postgres.SaveOperationParams{
 				ID:        uuid.New().String(),
 				UID:       usr.ID,
 				CatID:     cat.ID,
-				Name:      opName,
+				Operation: opName,
 				Currency:  usr.Currency,
 				Money:     money,
 				OccuredAt: occuredAt,
@@ -255,61 +257,69 @@ func (b *Bot) HandleText(c tele.Context) error {
 			return c.Send(msg.Getf(msg.ExpenseSaved, usr.Language, money.String(), usr.Currency, cat.Name, opName))
 		}
 		if !errors.Is(err, postgres.ErrNotFound) {
-			return fmt.Errorf("operation search failed: %w", err)
+			return fmt.Errorf("keyword search failed: %w", err)
 		}
 
-		// Ask for category select (only if operation with the same name not found)
-		cats, err := b.category.ListByUserID(ctx, usr.ID, domain.CatType(catType))
-		if err != nil {
-			return fmt.Errorf("list categories failed: %w", err)
-		}
-
-		kb := &tele.ReplyMarkup{}
 		step := domain.StepCategorySelection
 
-		btnRows := make([]tele.Row, 0, len(cats)/2+2)
-
-		var tmp tele.Btn
-
-		for i, cat := range cats {
-			btn := kb.Data(cat.Name, step.String(), cat.ID)
-
-			// maximum 5 buttons in one column, optimal for mobile devices
-			if len(cats) <= 5 {
-				btnRows = append(btnRows, kb.Row(btn))
-				continue
-			}
-
-			if i%2 == 0 {
-				tmp = btn
-				continue
-			}
-
-			btnRows = append(btnRows, []tele.Btn{tmp, btn})
+		kb, err := b.categoriesKeyboard(ctx, usr, step, domain.CatType(catType))
+		if err != nil {
+			return fmt.Errorf("")
 		}
-
-		btnOther := kb.Data(msg.Get(msg.BtnOther, usr.Language), step.String(), domain.OtherCategoryID)
-		btnCancel := kb.Data(msg.Get(msg.BtnCancel, usr.Language), domain.StepCancel.String())
-
-		btnRows = append(btnRows, kb.Row(btnOther))
-		btnRows = append(btnRows, kb.Row(btnCancel))
-
-		kb.Inline(btnRows...)
 
 		b.state.Add(usr.IDString(), domain.State{
 			Step: step,
 			Data: operation{
 				name:      opName,
-				catType:   domain.CatType(catType),
 				money:     money,
 				occuredAt: occuredAt,
 			},
 		})
 
-		slog.InfoContext(ctx, "category selection step")
-
 		return c.Send(msg.Get(msg.CategorySelection, usr.Language), kb)
 	}
+}
+
+// categoriesKeyboard builds inline keyboard with categories.
+func (b *Bot) categoriesKeyboard(ctx context.Context, usr domain.User, step domain.Step, ct domain.CatType) (*tele.ReplyMarkup, error) {
+	// Ask for category select (only if operation with the same name not found)
+	cats, err := b.category.ListByUserID(ctx, usr.ID, ct)
+	if err != nil {
+		return nil, fmt.Errorf("list categories failed: %w", err)
+	}
+
+	kb := &tele.ReplyMarkup{}
+
+	btnRows := make([]tele.Row, 0, len(cats)/2+2)
+
+	var tmp tele.Btn
+
+	for i, cat := range cats {
+		btn := kb.Data(cat.Name, step.String(), cat.ID)
+
+		// maximum 5 buttons in one column, optimal for mobile devices
+		if len(cats) <= 5 {
+			btnRows = append(btnRows, kb.Row(btn))
+			continue
+		}
+
+		if i%2 == 0 {
+			tmp = btn
+			continue
+		}
+
+		btnRows = append(btnRows, []tele.Btn{tmp, btn})
+	}
+
+	btnOther := kb.Data(msg.Get(msg.BtnOther, usr.Language), step.String(), domain.OtherCategoryID)
+	btnCancel := kb.Data(msg.Get(msg.BtnCancel, usr.Language), domain.StepCancel.String())
+
+	btnRows = append(btnRows, kb.Row(btnOther))
+	btnRows = append(btnRows, kb.Row(btnCancel))
+
+	kb.Inline(btnRows...)
+
+	return kb, nil
 }
 
 type buttonCallback struct {
@@ -318,8 +328,6 @@ type buttonCallback struct {
 }
 
 func parseCallback(data string) (buttonCallback, error) {
-	slog.Info("data", "data", data)
-
 	data = strings.TrimPrefix(data, "\f")
 	dataparts := strings.Split(data, "|")
 
@@ -335,7 +343,6 @@ func parseCallback(data string) (buttonCallback, error) {
 
 type operation struct {
 	name      string
-	catType   domain.CatType
 	money     money.Money
 	occuredAt time.Time
 }
@@ -373,7 +380,7 @@ func (b *Bot) HandleCallback(c tele.Context) error {
 			ID:        uuid.New().String(),
 			UID:       usr.ID,
 			CatID:     cb.data,
-			Name:      op.name,
+			Operation: op.name,
 			Currency:  usr.Currency,
 			Money:     op.money,
 			OccuredAt: op.occuredAt,
@@ -387,7 +394,7 @@ func (b *Bot) HandleCallback(c tele.Context) error {
 			return fmt.Errorf("category not found: %w", err)
 		}
 
-		if op.catType == domain.CatTypeIncome {
+		if op.money > 0 {
 			return c.Edit(msg.Getf(msg.IncomeSaved, usr.Language, op.money.String(), usr.Currency, cat.Name, op.name))
 		}
 

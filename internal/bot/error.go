@@ -15,6 +15,7 @@ var (
 	errStateNotFound           = errors.New("no state found")
 	errInvalidStateData        = errors.New("invalid state data")
 	errUnsupportedCallbackData = errors.New("unsupported callback data")
+	errZeroMoney               = errors.New("money must be greater or less than 0")
 )
 
 func (b *Bot) HandleError(err error, c tele.Context) {

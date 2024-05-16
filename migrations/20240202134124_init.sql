@@ -72,7 +72,7 @@ CREATE TABLE IF NOT EXISTS user_keywords (
     category_id uuid NOT NULL REFERENCES categories (id)
 );
 
-CREATE UNIQUE INDEX idx_user_keyword_operation ON user_keywords (operation, user_id);
+CREATE UNIQUE INDEX idx_user_keyword ON user_keywords (operation, user_id, category_id);
 
 CREATE INDEX idx_active_operations ON operations (deleted_at)
 WHERE deleted_at is NULL;
