@@ -80,7 +80,7 @@ func (b *Bot) ListCategories(c tele.Context) error {
 
 	// TODO: ugly ass shit
 
-	if _, err := sb.WriteString(fmt.Sprintf("%s\n\n", msg.Get(msg.ExpenseCategoriesTitle, usr.Language))); err != nil {
+	if _, err := sb.WriteString(fmt.Sprintf("%s\n\n", msg.Get(msg.ExpenseCatsTitle, usr.Language))); err != nil {
 		return fmt.Errorf("write expense title: %w", err)
 	}
 
@@ -93,7 +93,7 @@ func (b *Bot) ListCategories(c tele.Context) error {
 		}
 	}
 
-	if _, err := sb.WriteString(fmt.Sprintf("\n%s\n\n", msg.Get(msg.IncomeCategoriesTitle, usr.Language))); err != nil {
+	if _, err := sb.WriteString(fmt.Sprintf("\n%s\n\n", msg.Get(msg.IncomeCatsTitle, usr.Language))); err != nil {
 		return fmt.Errorf("write income title: %w", err)
 	}
 
@@ -109,6 +109,30 @@ func (b *Bot) ListCategories(c tele.Context) error {
 	return c.Send(sb.String())
 }
 
+func (b *Bot) AddCategory(c tele.Context) error {
+	usr, ok := userFromContext(c)
+	if !ok {
+		return errUserNotInContext
+	}
+
+	kb := &tele.ReplyMarkup{}
+	step := domain.StepCatAddTypeSelection
+
+	btnIncome := kb.Data(msg.Get(msg.BtnIncome, usr.Language), step.String(), domain.CatTypeIncome.String())
+	btnExpenses := kb.Data(msg.Get(msg.BtnExpenses, usr.Language), step.String(), domain.CatTypeExpenses.String())
+
+	kb.Inline(
+		kb.Row(btnIncome),
+		kb.Row(btnExpenses),
+		kb.Row(btnCancel(kb, usr.Language)),
+	)
+
+	b.state.Add(usr.IDString(), domain.State{Step: step})
+	slog.InfoContext(stdContext(c), "added /add_category state", "step", step)
+
+	return c.Send(msg.Get(msg.CatAddTypeSelection, usr.Language), kb)
+}
+
 func (b *Bot) RenameCategory(c tele.Context) error {
 	usr, ok := userFromContext(c)
 	if !ok {
@@ -116,7 +140,7 @@ func (b *Bot) RenameCategory(c tele.Context) error {
 	}
 
 	kb := &tele.ReplyMarkup{}
-	step := domain.StepCategoryTypeSelection
+	step := domain.StepCatRenameTypeSelection
 
 	btnIncome := kb.Data(msg.Get(msg.BtnIncome, usr.Language), step.String(), domain.CatTypeIncome.String())
 	btnExpenses := kb.Data(msg.Get(msg.BtnExpenses, usr.Language), step.String(), domain.CatTypeExpenses.String())
@@ -129,7 +153,7 @@ func (b *Bot) RenameCategory(c tele.Context) error {
 
 	b.state.Add(usr.IDString(), domain.State{Step: step})
 
-	return c.Send(msg.Get(msg.CategoryTypeSelection, usr.Language), kb)
+	return c.Send(msg.Get(msg.CatRenameTypeSelection, usr.Language), kb)
 }
 
 func (b *Bot) SetLanguage(c tele.Context) error {
@@ -139,10 +163,10 @@ func (b *Bot) SetLanguage(c tele.Context) error {
 	}
 
 	kb := &tele.ReplyMarkup{}
-	step := domain.StepLanguageSelection
+	step := domain.StepLangSelection
 
-	btnRus := kb.Data(msg.Get(msg.BtnRussian, usr.Language), step.String(), "ru")
-	btnEng := kb.Data(msg.Get(msg.BtnEnglish, usr.Language), step.String(), "en")
+	btnRus := kb.Data(msg.Get(msg.BtnRUS, usr.Language), step.String(), "ru")
+	btnEng := kb.Data(msg.Get(msg.BtnENG, usr.Language), step.String(), "en")
 
 	kb.Inline(
 		kb.Row(btnRus),
@@ -152,7 +176,7 @@ func (b *Bot) SetLanguage(c tele.Context) error {
 
 	b.state.Add(usr.IDString(), domain.State{Step: step})
 
-	return c.Send(msg.Get(msg.LanguageSelection, usr.Language), kb)
+	return c.Send(msg.Get(msg.LangSelection, usr.Language), kb)
 }
 
 func (b *Bot) SetCurrency(c tele.Context) error {
@@ -162,7 +186,7 @@ func (b *Bot) SetCurrency(c tele.Context) error {
 	}
 
 	kb := &tele.ReplyMarkup{}
-	step := domain.StepCurrencySelection
+	step := domain.StepCurrSelection
 
 	btnRUB := kb.Data(msg.Get(msg.BtnRUB, usr.Language), step.String(), "RUB")
 	btnUSD := kb.Data(msg.Get(msg.BtnUSD, usr.Language), step.String(), "USD")
@@ -177,7 +201,7 @@ func (b *Bot) SetCurrency(c tele.Context) error {
 
 	b.state.Add(usr.IDString(), domain.State{Step: step})
 
-	return c.Send(msg.Get(msg.CurrencySelection, usr.Language), kb)
+	return c.Send(msg.Get(msg.CurrSelection, usr.Language), kb)
 }
 
 func (b *Bot) HandleText(c tele.Context) error {
@@ -194,7 +218,7 @@ func (b *Bot) HandleText(c tele.Context) error {
 	}
 
 	switch state.Step {
-	case domain.StepCurrencySelection:
+	case domain.StepCurrSelection:
 		defer b.state.Remove(usr.IDString())
 
 		usr, err := b.user.Update(ctx, domain.User{
@@ -204,14 +228,14 @@ func (b *Bot) HandleText(c tele.Context) error {
 		})
 		if err != nil {
 			if errors.Is(err, domain.ErrUnsupportedCurrency) {
-				return c.Send(msg.Get(msg.InvalidCurrency, usr.Language))
+				return c.Send(msg.Get(msg.InvalidCurr, usr.Language))
 			}
 
 			return fmt.Errorf("user not updated on text handle: %w", err)
 		}
 
-		return c.Send(msg.Getf(msg.CurrencySaved, usr.Language, usr.Currency, usr.Currency))
-	case domain.StepCategoryRename:
+		return c.Send(msg.Getf(msg.CurrSaved, usr.Language, usr.Currency, usr.Currency))
+	case domain.StepCatRename:
 		defer b.state.Remove(usr.IDString())
 
 		cat, ok := state.Data.(postgres.Category)
@@ -241,12 +265,35 @@ func (b *Bot) HandleText(c tele.Context) error {
 			return fmt.Errorf("category not replaced: %w", err)
 		}
 
-		return c.Send(msg.Getf(msg.CategoryRenamed, usr.Language, cat.Name, newCatName))
+		return c.Send(msg.Getf(msg.CatRenamed, usr.Language, cat.Name, newCatName))
+	case domain.StepCatAdd:
+		defer b.state.Remove(usr.IDString())
+
+		catType, ok := state.Data.(domain.CatType)
+		if !ok {
+			return errInvalidStateData
+		}
+
+		catName := c.Text()
+
+		if err := b.category.SaveForUser(ctx, postgres.SaveCategoryParams{
+			ID:        uuid.NewString(),
+			Name:      catName,
+			Type:      catType,
+			Author:    usr.ID,
+			CreatedAt: time.Now(),
+		}); err != nil {
+			return fmt.Errorf("category not created: %w", err)
+		}
+
+		slog.InfoContext(ctx, "new category added", "name", catName, "type", catType)
+
+		return c.Send(msg.Getf(msg.CatAdded, usr.Language, catName))
 	default:
 		// handle operation save
 		parts := strings.Split(c.Text(), " ")
 		if len(parts) < 2 {
-			return c.Send(msg.Get(msg.InvalidOperationFormat, usr.Language))
+			return c.Send(msg.Get(msg.InvalidOperationFmt, usr.Language))
 		}
 
 		moneyStr := parts[0]
@@ -258,11 +305,11 @@ func (b *Bot) HandleText(c tele.Context) error {
 
 		money, err := money.Parse(moneyStr)
 		if err != nil {
-			return c.Send(msg.Get(msg.InvalidOperationFormat, usr.Language))
+			return c.Send(msg.Get(msg.InvalidOperationFmt, usr.Language))
 		}
 
 		if money == 0 {
-			return c.Send(msg.Get(msg.InvalidOperationFormat, usr.Language))
+			return c.Send(msg.Get(msg.InvalidOperationFmt, usr.Language))
 		}
 
 		occuredAt := time.Now()
@@ -316,7 +363,7 @@ func (b *Bot) HandleText(c tele.Context) error {
 			return fmt.Errorf("keyword search failed: %w", err)
 		}
 
-		step := domain.StepCategorySelection
+		step := domain.StepCatSelection
 
 		kb, err := b.categoriesKeyboard(ctx, usr, step, domain.CatType(catType), true)
 		if err != nil {
@@ -332,7 +379,7 @@ func (b *Bot) HandleText(c tele.Context) error {
 			},
 		})
 
-		return c.Send(msg.Get(msg.CategorySelection, usr.Language), kb)
+		return c.Send(msg.Get(msg.CatSelection, usr.Language), kb)
 	}
 }
 
@@ -422,7 +469,7 @@ func (b *Bot) HandleCallback(c tele.Context) error {
 	slog.InfoContext(ctx, "callback received", "unique", cb.unique, "data", cb.data, "callback_id", telecb.ID)
 
 	switch cb.unique {
-	case domain.StepCategorySelection.String():
+	case domain.StepCatSelection.String():
 		state, ok := b.state.Get(usr.IDString())
 		if !ok {
 			return fmt.Errorf("currency selection callback: %w", errStateNotFound)
@@ -456,28 +503,28 @@ func (b *Bot) HandleCallback(c tele.Context) error {
 		}
 
 		return c.Edit(msg.Getf(msg.ExpenseSaved, usr.Language, op.money.String(), usr.Currency, cat.Name, op.name))
-	case domain.StepCategoryTypeSelection.String():
-		kb, err := b.categoriesKeyboard(ctx, usr, domain.StepCategoryRenameSelection, domain.CatType(cb.data), false)
+	case domain.StepCatRenameTypeSelection.String():
+		kb, err := b.categoriesKeyboard(ctx, usr, domain.StepCatRenameSelection, domain.CatType(cb.data), false)
 		if err != nil {
 			return fmt.Errorf("categories keyboard in callback: %w", err)
 		}
 
-		b.state.Add(usr.IDString(), domain.State{Step: domain.StepCategoryRenameSelection})
+		b.state.Add(usr.IDString(), domain.State{Step: domain.StepCatRenameSelection})
 
-		return c.Edit(msg.Get(msg.CategoryRenameSelection, usr.Language), kb)
-	case domain.StepCategoryRenameSelection.String():
+		return c.Edit(msg.Get(msg.CatRenameSelection, usr.Language), kb)
+	case domain.StepCatRenameSelection.String():
 		cat, err := b.category.FindByID(ctx, cb.data)
 		if err != nil {
 			return fmt.Errorf("category not found on category rename: %w", err)
 		}
 
 		b.state.Add(usr.IDString(), domain.State{
-			Step: domain.StepCategoryRename,
+			Step: domain.StepCatRename,
 			Data: cat,
 		})
 
-		return c.Edit(msg.Getf(msg.CategoryRename, usr.Language, cat.Name))
-	case domain.StepCurrencySelection.String():
+		return c.Edit(msg.Getf(msg.CatRename, usr.Language, cat.Name))
+	case domain.StepCurrSelection.String():
 		defer b.state.Remove(usr.IDString())
 
 		usr, err := b.user.Update(ctx, domain.User{
@@ -487,14 +534,21 @@ func (b *Bot) HandleCallback(c tele.Context) error {
 		})
 		if err != nil {
 			if errors.Is(err, domain.ErrUnsupportedCurrency) {
-				return c.Send(msg.Get(msg.InvalidCurrency, usr.Language))
+				return c.Send(msg.Get(msg.InvalidCurr, usr.Language))
 			}
 
 			return fmt.Errorf("currency not set in callback: %w", err)
 		}
 
-		return c.Edit(msg.Getf(msg.CurrencySaved, usr.Language, usr.Currency, usr.Currency))
-	case domain.StepLanguageSelection.String():
+		return c.Edit(msg.Getf(msg.CurrSaved, usr.Language, usr.Currency, usr.Currency))
+	case domain.StepCatAddTypeSelection.String():
+		b.state.Add(usr.IDString(), domain.State{
+			Step: domain.StepCatAdd,
+			Data: domain.CatType(cb.data),
+		})
+		slog.InfoContext(ctx, "added step on category add type selection", "step", domain.StepCatAdd, "data", cb.data)
+		return c.Edit(msg.Get(msg.CatAdd, usr.Language))
+	case domain.StepLangSelection.String():
 		defer b.state.Remove(usr.IDString())
 
 		usr, err := b.user.Update(ctx, domain.User{
@@ -506,7 +560,7 @@ func (b *Bot) HandleCallback(c tele.Context) error {
 			return fmt.Errorf("language not set in callback: %w", err)
 		}
 
-		return c.Edit(msg.Getf(msg.LanguageSaved, usr.Language, iso6391.NativeName(usr.Language)))
+		return c.Edit(msg.Getf(msg.LangSaved, usr.Language, iso6391.NativeName(usr.Language)))
 	case domain.StepCancel.String():
 		b.state.Remove(usr.IDString())
 		return c.Edit(msg.Get(msg.OperationCanceled, usr.Language))

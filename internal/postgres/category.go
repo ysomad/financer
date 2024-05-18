@@ -104,6 +104,43 @@ func (s CategoryStorage) Save(ctx context.Context, p SaveCategoryParams) error {
 	return nil
 }
 
+func (s CategoryStorage) SaveForUser(ctx context.Context, p SaveCategoryParams) error {
+	sql1, args1, err := s.Builder.
+		Insert("categories").
+		Columns("id, name, type, author, created_at").
+		Values(p.ID, p.Name, p.Type, p.Author, p.CreatedAt).
+		ToSql()
+	if err != nil {
+		return err
+	}
+
+	sql2, args2, err := s.Builder.
+		Insert("user_categories").
+		Columns("user_id, category_id").
+		Values(p.Author, p.ID).
+		ToSql()
+	if err != nil {
+		return err
+	}
+
+	err = pgx.BeginTxFunc(ctx, s.Pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
+		if _, err := s.Pool.Exec(ctx, sql1, args1...); err != nil {
+			return fmt.Errorf("category not saved: %w", err)
+		}
+
+		if _, err := s.Pool.Exec(ctx, sql2, args2...); err != nil {
+			return fmt.Errorf("not attached to user: %w", err)
+		}
+
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 type ReplaceCategoryParams struct {
 	UID   int64
 	OldID string
@@ -112,7 +149,7 @@ type ReplaceCategoryParams struct {
 
 // Replace replaces category from OldID to NewID in user categories.
 func (s CategoryStorage) Replace(ctx context.Context, p ReplaceCategoryParams) error {
-	sql, args, err := s.Builder.
+	sql1, args1, err := s.Builder.
 		Update("user_categories").
 		Set("category_id", p.NewID).
 		Where(sq.And{
@@ -124,8 +161,31 @@ func (s CategoryStorage) Replace(ctx context.Context, p ReplaceCategoryParams) e
 		return err
 	}
 
-	if _, err := s.Pool.Exec(ctx, sql, args...); err != nil {
-		return err
+	sql2, args2, err := s.Builder.
+		Update("operations").
+		Set("category_id", p.NewID).
+		Where(sq.And{
+			sq.Eq{"user_id": p.UID},
+			sq.Eq{"category_id": p.OldID},
+		}).
+		ToSql()
+	if err != nil {
+		return nil
+	}
+
+	err = pgx.BeginTxFunc(ctx, s.Pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
+		if _, err := s.Pool.Exec(ctx, sql1, args1...); err != nil {
+			return fmt.Errorf("user category not replaced: %w", err)
+		}
+
+		if _, err := s.Pool.Exec(ctx, sql2, args2...); err != nil {
+			return fmt.Errorf("operations not updated: %w", err)
+		}
+
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("tx: %w", err)
 	}
 
 	return nil

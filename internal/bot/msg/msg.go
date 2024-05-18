@@ -5,41 +5,50 @@ import "fmt"
 type Type uint8
 
 const (
-	// general
 	InternalError Type = iota
 	OperationCanceled
 
-	// steps
-	CurrencySelection
-	CurrencySaved
+	// Currency set
+	CurrSelection
+	CurrSaved
 
-	LanguageSelection
-	LanguageSaved
+	// Language set
+	LangSelection
+	LangSaved
 
-	CategorySelection
+	// Operation create
+	CatSelection
 	ExpenseSaved
 	IncomeSaved
 
-	CategoryTypeSelection
-	CategoryRenameSelection
-	CategoryRename
-	CategoryRenamed
+	// Category rename
+	CatRenameTypeSelection
+	CatRenameSelection
+	CatRename
+	CatRenamed
+
+	// Category add
+	CatAddTypeSelection
+	CatAdd
+	CatAdded
 
 	// logic errors
-	InvalidCurrency
-	InvalidOperationFormat
+	InvalidCurr
+	InvalidOperationFmt
 
 	// message titles
-	ExpenseCategoriesTitle
-	IncomeCategoriesTitle
+	ExpenseCatsTitle
+	IncomeCatsTitle
 
 	// buttons
 	BtnCancel
 	BtnRUB
 	BtnEUR
 	BtnUSD
-	BtnRussian
-	BtnEnglish
+
+	BtnRUS
+	BtnENG
+
 	BtnOther
 	BtnIncome
 	BtnExpenses
@@ -57,23 +66,23 @@ var messages = map[Type]map[string]string{
 	},
 
 	// Steps
-	CurrencySelection: {
+	CurrSelection: {
 		"ru": "Выбери из списка или отправь любую валюту в ISO-4217 формате (например UAH, KZT, GBP и другие)",
 		"en": "Choose from list or send any other currency in ISO-4217 format (for example UAH, KZT, GBP etc)",
 	},
-	CurrencySaved: {
+	CurrSaved: {
 		"ru": "<b>%s</b> сохранена как валюта по умолчанию, для следующей команды без указания валюты я буду использовать <b>%s</b>",
 		"en": "<b>%s</b> saved as your default currency, next time you send me a command without specifying currency I'll use <b>%s</b>",
 	},
-	CategorySelection: {
+	CatSelection: {
 		"ru": "Выбери категорию расхода или дохода для учета",
 		"en": "Choose category for the accounted expense or income",
 	},
-	LanguageSelection: {
+	LangSelection: {
 		"ru": "Выбери язык с помощью которого я буду с тобой общаться",
 		"en": "Select language which I'll be using for chatting with you",
 	},
-	LanguageSaved: {
+	LangSaved: {
 		"ru": "Язык изменен на <b>%s</b>",
 		"en": "Language was set to <b>%s</b>",
 	},
@@ -85,39 +94,51 @@ var messages = map[Type]map[string]string{
 		"ru": "Заработано <b>%s %s</b> в категории %s\n\n<i>%s</i>",
 		"en": "Earned <b>%s %s</b> in %s category\n\n<i>%s</i>",
 	},
-	CategoryTypeSelection: {
+	CatRenameTypeSelection: {
 		"ru": "Категорию расходов или доходов хочешь переименовать?",
 		"en": "Category of expenses or income would like to rename?",
 	},
-	CategoryRenameSelection: {
+	CatRenameSelection: {
 		"ru": "Какую категорию хочешь переименовать?",
 		"en": "Which category you want to rename?",
 	},
-	CategoryRename: {
+	CatRename: {
 		"ru": "Как теперь будет называться категория <b>%s</b>?",
 		"en": "What will <b>%s</b> category be called now?",
 	},
-	CategoryRenamed: {
+	CatRenamed: {
 		"ru": "Категория <b>%s</b> переименована в <b>%s</b>",
 		"en": "Category <b>%s</b> renamed to <b>%s</b>",
 	},
+	CatAddTypeSelection: {
+		"ru": "Категорию расходов или доходов хочешь добавить?",
+		"en": "Category of expenses or income would like to add?",
+	},
+	CatAdd: {
+		"ru": "Как будет называться новая категория?",
+		"en": "What will new category be called?",
+	},
+	CatAdded: {
+		"ru": "Категория <b>%s</b> успешно создана",
+		"en": "Category <b>%s</b> successfully created",
+	},
 
 	// Logic errors
-	InvalidCurrency: {
+	InvalidCurr: {
 		"ru": "Некорректный формат валюты, отправь валюту в ISO-4217 формате",
 		"en": "Invalid currency format, provide currency code in ISO-4217 format",
 	},
 
 	// Message titles
-	ExpenseCategoriesTitle: {
+	ExpenseCatsTitle: {
 		"ru": "➖ Категории расходов",
 		"en": "➖ Expense categories",
 	},
-	IncomeCategoriesTitle: {
+	IncomeCatsTitle: {
 		"ru": "➕ Категории доходов",
 		"en": "➕ Income categories",
 	},
-	InvalidOperationFormat: {
+	InvalidOperationFmt: {
 		"ru": "Некорректный формат операции",
 		"en": "Invalid operation format",
 	},
@@ -139,11 +160,11 @@ var messages = map[Type]map[string]string{
 		"ru": "Отмена",
 		"en": "Cancel",
 	},
-	BtnRussian: {
+	BtnRUS: {
 		"ru": "🇷🇺 Русский",
 		"en": "🇷🇺 Russian",
 	},
-	BtnEnglish: {
+	BtnENG: {
 		"ru": "🇺🇸 Английский",
 		"en": "🇺🇸 English",
 	},
@@ -171,6 +192,5 @@ func Get(t Type, lang string) string {
 }
 
 func Getf(t Type, lang string, args ...any) string {
-	msg := Get(t, lang)
-	return fmt.Sprintf(msg, args...)
+	return fmt.Sprintf(Get(t, lang), args...)
 }

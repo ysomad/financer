@@ -108,17 +108,46 @@ func main() {
 	if err != nil {
 		slogx.Fatal(err.Error())
 	}
+	defer tbot.Close()
+
+	if err := tbot.SetCommands([]tele.Command{
+		{
+			Text:        "categories",
+			Description: "List categories",
+		},
+
+		{
+			Text:        "add_category",
+			Description: "Add new category",
+		},
+		{
+			Text:        "rename_category",
+			Description: "Rename existing category",
+		},
+		{
+			Text:        "set_language",
+			Description: "Set bot language",
+		},
+		{
+			Text:        "set_currency",
+			Description: "Set default currency",
+		},
+	}); err != nil {
+		slogx.Fatal(err.Error())
+	}
 
 	tbot.Use(middleware.Recover())
 	tbot.Use(bot.ContextMiddleware(conf.CommitHash))
 	tbot.Use(b.UserContextMiddleware)
 
 	tbot.Handle("/start", b.Start)
-	tbot.Handle("/set_currency", b.SetCurrency)
+
 	tbot.Handle("/categories", b.ListCategories)
-	tbot.Handle("/set_lang", b.SetLanguage)
-	tbot.Handle("/set_currency", b.SetCurrency)
 	tbot.Handle("/rename_category", b.RenameCategory)
+	tbot.Handle("/add_category", b.AddCategory)
+
+	tbot.Handle("/set_language", b.SetLanguage)
+	tbot.Handle("/set_currency", b.SetCurrency)
 
 	tbot.Handle(tele.OnCallback, b.HandleCallback)
 	tbot.Handle(tele.OnText, b.HandleText)

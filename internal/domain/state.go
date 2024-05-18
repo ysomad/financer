@@ -11,13 +11,20 @@ const (
 	StepUnknown Step = "unknown"
 	StepCancel  Step = "cancel"
 
-	StepCurrencySelection Step = "currency_selection"
-	StepCategorySelection Step = "category_selection"
-	StepLanguageSelection Step = "language_selection"
+	// Operation create
+	StepCurrSelection Step = "currency_selection"
 
-	StepCategoryTypeSelection   Step = "category_type_selection"
-	StepCategoryRenameSelection Step = "category_rename_selection"
-	StepCategoryRename          Step = "category_rename"
+	StepCatSelection  Step = "category_selection"
+	StepLangSelection Step = "language_selection"
+
+	// Category rename
+	StepCatRenameTypeSelection Step = "category_rename_type_selection"
+	StepCatRenameSelection     Step = "category_rename_selection"
+	StepCatRename              Step = "category_rename"
+
+	// Category add
+	StepCatAddTypeSelection Step = "category_add_type_selection"
+	StepCatAdd              Step = "category_step_add"
 )
 
 func (s Step) String() string {
