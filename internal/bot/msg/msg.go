@@ -7,11 +7,6 @@ type ID uint8
 const (
 	InternalError ID = iota
 	OperationCanceled
-	CmdListCategories
-	CmdAddCategory
-	CmdRenameCategory
-	CmdSetLanguage
-	CmdSetCurrency
 
 	// Currency set
 	CurrSelection
@@ -73,26 +68,6 @@ var messages = map[ID]Message{
 	OperationCanceled: {
 		RU: "Текущая операция отменена",
 		EN: "Current operation is canceled",
-	},
-	CmdListCategories: {
-		RU: "Список категорий",
-		EN: "List categories",
-	},
-	CmdAddCategory: {
-		RU: "Добавить категорию",
-		EN: "Add category",
-	},
-	CmdRenameCategory: {
-		RU: "Переименовать категорию",
-		EN: "Rename category",
-	},
-	CmdSetCurrency: {
-		RU: "Изменить валюту по умолчанию",
-		EN: "Change default currency",
-	},
-	CmdSetLanguage: {
-		RU: "Изменить язык",
-		EN: "Change language",
 	},
 
 	// Steps

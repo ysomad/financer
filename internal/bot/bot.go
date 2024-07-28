@@ -59,7 +59,7 @@ func New(conf config.Config, st *expirable.LRU[string, botstate.State], cat post
 		return nil, fmt.Errorf("telebot not created: %w", err)
 	}
 
-	if err = bot.setCommands(defaultLang); err != nil {
+	if err = bot.setCommands(); err != nil {
 		return nil, err
 	}
 
@@ -94,28 +94,28 @@ func (b *Bot) Stop() {
 	}
 }
 
-func (b *Bot) setCommands(lang string) error {
+func (b *Bot) setCommands() error {
 	err := b.tele.SetCommands([]tele.Command{
 		{
 			Text:        "categories",
-			Description: msg.Get(msg.CmdListCategories, lang),
+			Description: "List categories",
 		},
 
 		{
 			Text:        "add_category",
-			Description: msg.Get(msg.CmdAddCategory, lang),
+			Description: "Add new category",
 		},
 		{
 			Text:        "rename_category",
-			Description: msg.Get(msg.CmdRenameCategory, lang),
+			Description: "Rename category",
 		},
 		{
 			Text:        "set_language",
-			Description: msg.Get(msg.CmdSetLanguage, lang),
+			Description: "Change bot language",
 		},
 		{
 			Text:        "set_currency",
-			Description: msg.Get(msg.CmdSetCurrency, lang),
+			Description: "Change default currency",
 		},
 	})
 	if err != nil {
@@ -446,9 +446,9 @@ func (b *Bot) handleText(c tele.Context) error {
 
 		step := botstate.StepCatSelection
 
-		kb, err := b.categoriesKeyboard(ctx, usr, step, domain.CatType(catType), true)
+		kb, err := b.categoriesKeyboard(ctx, usr, step, catType, true)
 		if err != nil {
-			return fmt.Errorf("")
+			return err
 		}
 
 		b.state.Add(usr.IDString(), botstate.State{
@@ -638,10 +638,6 @@ func (b *Bot) handleCallback(c tele.Context) error {
 		})
 		if err != nil {
 			return fmt.Errorf("language not set in callback: %w", err)
-		}
-
-		if err = b.setCommands(usr.Language); err != nil {
-			slog.ErrorContext(ctx, "commands not set on language update", "cause", err.Error())
 		}
 
 		return c.Edit(msg.Getf(msg.LangSaved, usr.Language, iso6391.NativeName(usr.Language)))
