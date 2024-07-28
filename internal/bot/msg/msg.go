@@ -32,6 +32,8 @@ const (
 	CatAdd
 	CatAdded
 
+	KeywordsDeleted
+
 	// logic errors
 	InvalidCurr
 	InvalidOperationFmt
@@ -126,6 +128,10 @@ var messages = map[ID]Message{
 	CatAdded: {
 		RU: "Категория <b>%s</b> успешно создана",
 		EN: "Category <b>%s</b> successfully created",
+	},
+	KeywordsDeleted: {
+		RU: "Все ключевые слова операций удалены",
+		EN: "All operation keywords deleted",
 	},
 
 	// Logic errors

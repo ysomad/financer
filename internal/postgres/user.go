@@ -30,7 +30,7 @@ type CreateUserParams struct {
 	CreatedAt time.Time
 }
 
-func (s UserStorage) Create(ctx context.Context, p CreateUserParams) error {
+func (s *UserStorage) Create(ctx context.Context, p CreateUserParams) error {
 	sql1, args1, err := s.Builder.
 		Insert("users").
 		Columns("id, currency, language, created_at").
@@ -66,7 +66,7 @@ func (s UserStorage) Create(ctx context.Context, p CreateUserParams) error {
 	})
 }
 
-func (s UserStorage) Find(ctx context.Context, uid int64) (domain.User, error) {
+func (s *UserStorage) Find(ctx context.Context, uid int64) (domain.User, error) {
 	sql, args, err := s.Builder.
 		Select("id, currency, language").
 		From("users").
@@ -100,7 +100,7 @@ type UpdateParams struct {
 	UpdatedAt time.Time
 }
 
-func (s UserStorage) Update(ctx context.Context, p UpdateParams) error {
+func (s *UserStorage) Update(ctx context.Context, p UpdateParams) error {
 	sql, args, err := s.Builder.
 		Update("users").
 		Set("language", p.Language).

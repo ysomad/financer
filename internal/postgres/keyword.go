@@ -16,7 +16,7 @@ type KeywordStorage struct {
 	*pgclient.Client
 }
 
-func (s KeywordStorage) FindCategory(ctx context.Context, uid int64, opName string, ct domain.CatType) (Category, error) {
+func (s *KeywordStorage) FindCategory(ctx context.Context, uid int64, opName string, ct domain.CatType) (Category, error) {
 	sql, args, err := s.Builder.
 		Select("c.id id, c.name name, c.author author, c.type type").
 		From("user_keywords uk").
@@ -44,4 +44,20 @@ func (s KeywordStorage) FindCategory(ctx context.Context, uid int64, opName stri
 	}
 
 	return cat, nil
+}
+
+func (s *KeywordStorage) DeleteAll(ctx context.Context, uid int64) error {
+	sql, args, err := s.Builder.
+		Delete("user_keywords").
+		Where(sq.Eq{"user_id": uid}).
+		ToSql()
+	if err != nil {
+		return err
+	}
+
+	if _, err := s.Pool.Exec(ctx, sql, args...); err != nil {
+		return fmt.Errorf("exec: %w", err)
+	}
+
+	return nil
 }

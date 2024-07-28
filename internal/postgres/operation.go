@@ -30,7 +30,7 @@ type SaveOperationParams struct {
 	CreatedAt time.Time
 }
 
-func (s OperationStorage) Save(ctx context.Context, p SaveOperationParams) error {
+func (s *OperationStorage) Save(ctx context.Context, p SaveOperationParams) error {
 	sql1, args1, err := s.Builder.
 		Insert("operations").
 		Columns("id, user_id, category_id, name",

@@ -17,14 +17,14 @@ const (
 )
 
 type User struct {
-	storage postgres.UserStorage
+	storage *postgres.UserStorage
 }
 
-func NewUser(s postgres.UserStorage) User {
-	return User{storage: s}
+func NewUser(s *postgres.UserStorage) *User {
+	return &User{storage: s}
 }
 
-func (u User) GetOrCreate(ctx context.Context, uid int64) (domain.User, error) {
+func (u *User) GetOrCreate(ctx context.Context, uid int64) (domain.User, error) {
 	usr, err := u.storage.Find(ctx, uid)
 	if err == nil {
 		return usr, nil

@@ -7,12 +7,11 @@ import (
 	tele "gopkg.in/telebot.v3"
 
 	"github.com/ysomad/financer/internal/domain"
-	"github.com/ysomad/financer/internal/slogx"
 )
 
 const (
 	stdCtxKey  = "stdcontext"
-	userCtxKey = "user"
+	userCtxKey = "myepicuser"
 )
 
 // stdContext returns context.Context from telebot context
@@ -27,19 +26,20 @@ func stdContext(c tele.Context) context.Context {
 	return context.Background()
 }
 
-func ContextMiddleware(version string) func(next tele.HandlerFunc) tele.HandlerFunc {
+func contextMiddleware(version string) func(next tele.HandlerFunc) tele.HandlerFunc {
 	return func(next tele.HandlerFunc) tele.HandlerFunc {
 		return func(c tele.Context) error {
 			ctx := context.Background()
-			ctx = slogx.WithRecipient(ctx, c.Recipient().Recipient())
-			ctx = slogx.WithVersion(ctx, version)
+			ctx = withRecipient(ctx, c.Recipient().Recipient())
+			ctx = withVersion(ctx, version)
 			c.Set(stdCtxKey, ctx)
 			return next(c)
 		}
 	}
 }
 
-func (b *Bot) UserContextMiddleware(next tele.HandlerFunc) tele.HandlerFunc {
+// userContextMiddleware gets or creates user from db and sets it to context.
+func (b *Bot) userContextMiddleware(next tele.HandlerFunc) tele.HandlerFunc {
 	return func(c tele.Context) error {
 		usr, err := b.user.GetOrCreate(stdContext(c), c.Chat().ID)
 		if err != nil {

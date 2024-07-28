@@ -29,14 +29,14 @@ const defaultLang = "en"
 type Bot struct {
 	tele      *tele.Bot
 	state     *expirable.LRU[string, botstate.State]
-	category  postgres.CategoryStorage
-	user      service.User
-	operation postgres.OperationStorage
-	keyword   postgres.KeywordStorage
+	category  *postgres.CategoryStorage
+	user      *service.User
+	operation *postgres.OperationStorage
+	keyword   *postgres.KeywordStorage
 }
 
-func New(conf config.Config, st *expirable.LRU[string, botstate.State], cat postgres.CategoryStorage,
-	usr service.User, op postgres.OperationStorage, kw postgres.KeywordStorage,
+func New(conf config.Config, st *expirable.LRU[string, botstate.State], cat *postgres.CategoryStorage,
+	usr *service.User, op *postgres.OperationStorage, kw *postgres.KeywordStorage,
 ) (*Bot, error) {
 	bot := &Bot{
 		state:     st,
@@ -64,14 +64,15 @@ func New(conf config.Config, st *expirable.LRU[string, botstate.State], cat post
 	}
 
 	bot.tele.Use(middleware.Recover())
-	bot.tele.Use(ContextMiddleware(conf.Version))
-	bot.tele.Use(bot.UserContextMiddleware)
+	bot.tele.Use(contextMiddleware(conf.Version))
+	bot.tele.Use(bot.userContextMiddleware)
 
 	bot.tele.Handle("/start", bot.start)
 
 	bot.tele.Handle("/categories", bot.listCategories)
 	bot.tele.Handle("/rename_category", bot.renameCategory)
 	bot.tele.Handle("/add_category", bot.addCategory)
+	bot.tele.Handle("/delete_keywords", bot.deleteKeywords)
 
 	bot.tele.Handle("/set_language", bot.setLanguage)
 	bot.tele.Handle("/set_currency", bot.setCurrency)
@@ -116,6 +117,10 @@ func (b *Bot) setCommands() error {
 		{
 			Text:        "set_currency",
 			Description: "Change default currency",
+		},
+		{
+			Text:        "delete_keywords",
+			Description: "Delete operation keywords",
 		},
 	})
 	if err != nil {
@@ -647,4 +652,19 @@ func (b *Bot) handleCallback(c tele.Context) error {
 	default:
 		return fmt.Errorf("unsupported callback unique: %s", cb.unique)
 	}
+}
+
+func (b *Bot) deleteKeywords(c tele.Context) error {
+	usr, ok := userFromContext(c)
+	if !ok {
+		return errUserNotInContext
+	}
+
+	ctx := stdContext(c)
+
+	if err := b.keyword.DeleteAll(ctx, usr.ID); err != nil {
+		return fmt.Errorf("keywords not deleted: %w", err)
+	}
+
+	return c.Send(msg.Get(msg.KeywordsDeleted, usr.Language))
 }

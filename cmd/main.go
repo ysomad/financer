@@ -65,7 +65,7 @@ func main() {
 		// AddSource: true,
 		Level: slogx.ParseLevel(conf.LogLevel),
 	}))
-	handler = slogx.NewHandlerMiddleware(handler)
+	handler = bot.NewSlogMiddleware(handler)
 	slog.SetDefault(slog.New(handler))
 
 	slog.Debug("loaded config", "config", conf)
@@ -76,10 +76,10 @@ func main() {
 		slogx.Fatal(err.Error())
 	}
 
-	categoryStorage := postgres.CategoryStorage{Client: pgClient}
-	userStorage := postgres.UserStorage{Client: pgClient}
-	operationStorage := postgres.OperationStorage{Client: pgClient}
-	keywordStorage := postgres.KeywordStorage{Client: pgClient}
+	categoryStorage := &postgres.CategoryStorage{Client: pgClient}
+	userStorage := &postgres.UserStorage{Client: pgClient}
+	operationStorage := &postgres.OperationStorage{Client: pgClient}
+	keywordStorage := &postgres.KeywordStorage{Client: pgClient}
 
 	stateStorage := expirable.NewLRU[string, state.State](100, nil, time.Hour*24)
 
