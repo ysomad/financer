@@ -54,9 +54,9 @@ func (u *User) GetOrCreate(ctx context.Context, uid int64) (domain.User, error) 
 	}, nil
 }
 
-func (u User) Update(ctx context.Context, usr domain.User) (domain.User, error) {
+func (u *User) Update(ctx context.Context, usr domain.User) error {
 	if err := usr.Validate(); err != nil {
-		return domain.User{}, fmt.Errorf("user not valid before update: %w", err)
+		return fmt.Errorf("user not valid before update: %w", err)
 	}
 
 	if err := u.storage.Update(ctx, postgres.UpdateParams{
@@ -65,8 +65,8 @@ func (u User) Update(ctx context.Context, usr domain.User) (domain.User, error) 
 		Currency:  usr.Currency,
 		UpdatedAt: time.Now(),
 	}); err != nil {
-		return domain.User{}, fmt.Errorf("user not updated: %w", err)
+		return fmt.Errorf("user not updated: %w", err)
 	}
 
-	return usr, nil
+	return nil
 }

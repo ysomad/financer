@@ -307,12 +307,10 @@ func (b *Bot) handleText(c tele.Context) error {
 	case botstate.StepCurrSelection:
 		defer b.state.Remove(usr.IDString())
 
-		usr, err := b.user.Update(ctx, domain.User{
-			ID:       usr.ID,
-			Currency: c.Text(),
-			Language: usr.Language,
-		})
-		if err != nil {
+		// update usr currency
+		usr.Currency = c.Text()
+
+		if err := b.user.Update(ctx, usr); err != nil {
 			if errors.Is(err, domain.ErrUnsupportedCurrency) {
 				return c.Send(msg.Get(msg.InvalidCurr, usr.Language))
 			}
@@ -612,12 +610,10 @@ func (b *Bot) handleCallback(c tele.Context) error {
 	case botstate.StepCurrSelection:
 		defer b.state.Remove(usr.IDString())
 
-		usr, err := b.user.Update(ctx, domain.User{
-			ID:       usr.ID,
-			Currency: cb.data,
-			Language: usr.Language,
-		})
-		if err != nil {
+		// update usr currency
+		usr.Currency = cb.data
+
+		if err := b.user.Update(ctx, usr); err != nil {
 			if errors.Is(err, domain.ErrUnsupportedCurrency) {
 				return c.Send(msg.Get(msg.InvalidCurr, usr.Language))
 			}
@@ -636,12 +632,10 @@ func (b *Bot) handleCallback(c tele.Context) error {
 	case botstate.StepLangSelection:
 		defer b.state.Remove(usr.IDString())
 
-		usr, err := b.user.Update(ctx, domain.User{
-			ID:       usr.ID,
-			Currency: usr.Currency,
-			Language: cb.data,
-		})
-		if err != nil {
+		// update usr languege
+		usr.Language = cb.data
+
+		if err := b.user.Update(ctx, usr); err != nil {
 			return fmt.Errorf("language not set in callback: %w", err)
 		}
 
