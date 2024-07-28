@@ -10,44 +10,125 @@ import (
 
 	iso6391 "github.com/emvi/iso-639-1"
 	"github.com/google/uuid"
+	"github.com/hashicorp/golang-lru/v2/expirable"
+	tele "gopkg.in/telebot.v3"
+	"gopkg.in/telebot.v3/middleware"
+
 	"github.com/ysomad/financer/internal/bot/msg"
+	botstate "github.com/ysomad/financer/internal/bot/state"
+	"github.com/ysomad/financer/internal/config"
 	"github.com/ysomad/financer/internal/date"
 	"github.com/ysomad/financer/internal/domain"
 	"github.com/ysomad/financer/internal/money"
 	"github.com/ysomad/financer/internal/postgres"
 	"github.com/ysomad/financer/internal/service"
-
-	"github.com/hashicorp/golang-lru/v2/expirable"
-	tele "gopkg.in/telebot.v3"
 )
 
 const defaultLang = "en"
 
 type Bot struct {
-	state     *expirable.LRU[string, domain.State]
+	tele      *tele.Bot
+	state     *expirable.LRU[string, botstate.State]
 	category  postgres.CategoryStorage
 	user      service.User
 	operation postgres.OperationStorage
 	keyword   postgres.KeywordStorage
 }
 
-func New(st *expirable.LRU[string, domain.State], cat postgres.CategoryStorage,
+func New(conf config.Config, st *expirable.LRU[string, botstate.State], cat postgres.CategoryStorage,
 	usr service.User, op postgres.OperationStorage, kw postgres.KeywordStorage,
-) *Bot {
-	return &Bot{
+) (*Bot, error) {
+	bot := &Bot{
 		state:     st,
 		category:  cat,
 		user:      usr,
 		operation: op,
 		keyword:   kw,
 	}
+
+	var err error
+
+	bot.tele, err = tele.NewBot(tele.Settings{
+		Token:     conf.AccessToken,
+		Poller:    &tele.LongPoller{Timeout: time.Second},
+		Verbose:   conf.Verbose,
+		OnError:   bot.HandleError,
+		ParseMode: tele.ModeHTML,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("telebot not created: %w", err)
+	}
+
+	if err = bot.setCommands(defaultLang); err != nil {
+		return nil, err
+	}
+
+	bot.tele.Use(middleware.Recover())
+	bot.tele.Use(ContextMiddleware(conf.Version))
+	bot.tele.Use(bot.UserContextMiddleware)
+
+	bot.tele.Handle("/start", bot.start)
+
+	bot.tele.Handle("/categories", bot.listCategories)
+	bot.tele.Handle("/rename_category", bot.renameCategory)
+	bot.tele.Handle("/add_category", bot.addCategory)
+
+	bot.tele.Handle("/set_language", bot.setLanguage)
+	bot.tele.Handle("/set_currency", bot.setCurrency)
+
+	bot.tele.Handle(tele.OnCallback, bot.handleCallback)
+	bot.tele.Handle(tele.OnText, bot.handleText)
+
+	return bot, nil
+}
+
+func (b *Bot) Start() {
+	if b.tele != nil {
+		b.tele.Start()
+	}
+}
+
+func (b *Bot) Stop() {
+	if b.tele != nil {
+		b.tele.Stop()
+	}
+}
+
+func (b *Bot) setCommands(lang string) error {
+	err := b.tele.SetCommands([]tele.Command{
+		{
+			Text:        "categories",
+			Description: msg.Get(msg.CmdListCategories, lang),
+		},
+
+		{
+			Text:        "add_category",
+			Description: msg.Get(msg.CmdAddCategory, lang),
+		},
+		{
+			Text:        "rename_category",
+			Description: msg.Get(msg.CmdRenameCategory, lang),
+		},
+		{
+			Text:        "set_language",
+			Description: msg.Get(msg.CmdSetLanguage, lang),
+		},
+		{
+			Text:        "set_currency",
+			Description: msg.Get(msg.CmdSetCurrency, lang),
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("commands not set: %w", err)
+	}
+	return nil
 }
 
 func btnCancel(kb *tele.ReplyMarkup, lang string) tele.Btn {
-	return kb.Data(msg.Get(msg.BtnCancel, lang), domain.StepCancel.String())
+	return kb.Data(msg.Get(msg.BtnCancel, lang), botstate.StepCancel.String())
 }
 
-func (b *Bot) Start(c tele.Context) error {
+func (b *Bot) start(c tele.Context) error {
 	/*
 		1 Спросить валюту и язык по умолчанию
 		2 Создать юзера
@@ -61,7 +142,7 @@ func (b *Bot) Start(c tele.Context) error {
 	return nil
 }
 
-func (b *Bot) ListCategories(c tele.Context) error {
+func (b *Bot) listCategories(c tele.Context) error {
 	ctx := stdContext(c)
 
 	cats, err := b.category.ListByUserID(ctx, c.Chat().ID, domain.CatTypeUnspecified)
@@ -109,14 +190,14 @@ func (b *Bot) ListCategories(c tele.Context) error {
 	return c.Send(sb.String())
 }
 
-func (b *Bot) AddCategory(c tele.Context) error {
+func (b *Bot) addCategory(c tele.Context) error {
 	usr, ok := userFromContext(c)
 	if !ok {
 		return errUserNotInContext
 	}
 
 	kb := &tele.ReplyMarkup{}
-	step := domain.StepCatAddTypeSelection
+	step := botstate.StepCatAddTypeSelection
 
 	btnIncome := kb.Data(msg.Get(msg.BtnIncome, usr.Language), step.String(), domain.CatTypeIncome.String())
 	btnExpenses := kb.Data(msg.Get(msg.BtnExpenses, usr.Language), step.String(), domain.CatTypeExpenses.String())
@@ -127,20 +208,20 @@ func (b *Bot) AddCategory(c tele.Context) error {
 		kb.Row(btnCancel(kb, usr.Language)),
 	)
 
-	b.state.Add(usr.IDString(), domain.State{Step: step})
+	b.state.Add(usr.IDString(), botstate.State{Step: step})
 	slog.InfoContext(stdContext(c), "added /add_category state", "step", step)
 
 	return c.Send(msg.Get(msg.CatAddTypeSelection, usr.Language), kb)
 }
 
-func (b *Bot) RenameCategory(c tele.Context) error {
+func (b *Bot) renameCategory(c tele.Context) error {
 	usr, ok := userFromContext(c)
 	if !ok {
 		return errUserNotInContext
 	}
 
 	kb := &tele.ReplyMarkup{}
-	step := domain.StepCatRenameTypeSelection
+	step := botstate.StepCatRenameTypeSelection
 
 	btnIncome := kb.Data(msg.Get(msg.BtnIncome, usr.Language), step.String(), domain.CatTypeIncome.String())
 	btnExpenses := kb.Data(msg.Get(msg.BtnExpenses, usr.Language), step.String(), domain.CatTypeExpenses.String())
@@ -151,19 +232,19 @@ func (b *Bot) RenameCategory(c tele.Context) error {
 		kb.Row(btnCancel(kb, usr.Language)),
 	)
 
-	b.state.Add(usr.IDString(), domain.State{Step: step})
+	b.state.Add(usr.IDString(), botstate.State{Step: step})
 
 	return c.Send(msg.Get(msg.CatRenameTypeSelection, usr.Language), kb)
 }
 
-func (b *Bot) SetLanguage(c tele.Context) error {
+func (b *Bot) setLanguage(c tele.Context) error {
 	usr, ok := userFromContext(c)
 	if !ok {
 		return errUserNotInContext
 	}
 
 	kb := &tele.ReplyMarkup{}
-	step := domain.StepLangSelection
+	step := botstate.StepLangSelection
 
 	btnRus := kb.Data(msg.Get(msg.BtnRUS, usr.Language), step.String(), "ru")
 	btnEng := kb.Data(msg.Get(msg.BtnENG, usr.Language), step.String(), "en")
@@ -174,19 +255,19 @@ func (b *Bot) SetLanguage(c tele.Context) error {
 		kb.Row(btnCancel(kb, usr.Language)),
 	)
 
-	b.state.Add(usr.IDString(), domain.State{Step: step})
+	b.state.Add(usr.IDString(), botstate.State{Step: step})
 
 	return c.Send(msg.Get(msg.LangSelection, usr.Language), kb)
 }
 
-func (b *Bot) SetCurrency(c tele.Context) error {
+func (b *Bot) setCurrency(c tele.Context) error {
 	usr, ok := userFromContext(c)
 	if !ok {
 		return errUserNotInContext
 	}
 
 	kb := &tele.ReplyMarkup{}
-	step := domain.StepCurrSelection
+	step := botstate.StepCurrSelection
 
 	btnRUB := kb.Data(msg.Get(msg.BtnRUB, usr.Language), step.String(), "RUB")
 	btnUSD := kb.Data(msg.Get(msg.BtnUSD, usr.Language), step.String(), "USD")
@@ -199,12 +280,12 @@ func (b *Bot) SetCurrency(c tele.Context) error {
 		kb.Row(btnCancel(kb, usr.Language)),
 	)
 
-	b.state.Add(usr.IDString(), domain.State{Step: step})
+	b.state.Add(usr.IDString(), botstate.State{Step: step})
 
 	return c.Send(msg.Get(msg.CurrSelection, usr.Language), kb)
 }
 
-func (b *Bot) HandleText(c tele.Context) error {
+func (b *Bot) handleText(c tele.Context) error {
 	usr, ok := userFromContext(c)
 	if !ok {
 		return errUserNotInContext
@@ -218,7 +299,7 @@ func (b *Bot) HandleText(c tele.Context) error {
 	}
 
 	switch state.Step {
-	case domain.StepCurrSelection:
+	case botstate.StepCurrSelection:
 		defer b.state.Remove(usr.IDString())
 
 		usr, err := b.user.Update(ctx, domain.User{
@@ -235,7 +316,7 @@ func (b *Bot) HandleText(c tele.Context) error {
 		}
 
 		return c.Send(msg.Getf(msg.CurrSaved, usr.Language, usr.Currency, usr.Currency))
-	case domain.StepCatRename:
+	case botstate.StepCatRename:
 		defer b.state.Remove(usr.IDString())
 
 		cat, ok := state.Data.(postgres.Category)
@@ -266,7 +347,7 @@ func (b *Bot) HandleText(c tele.Context) error {
 		}
 
 		return c.Send(msg.Getf(msg.CatRenamed, usr.Language, cat.Name, newCatName))
-	case domain.StepCatAdd:
+	case botstate.StepCatAdd:
 		defer b.state.Remove(usr.IDString())
 
 		catType, ok := state.Data.(domain.CatType)
@@ -363,14 +444,14 @@ func (b *Bot) HandleText(c tele.Context) error {
 			return fmt.Errorf("keyword search failed: %w", err)
 		}
 
-		step := domain.StepCatSelection
+		step := botstate.StepCatSelection
 
 		kb, err := b.categoriesKeyboard(ctx, usr, step, domain.CatType(catType), true)
 		if err != nil {
 			return fmt.Errorf("")
 		}
 
-		b.state.Add(usr.IDString(), domain.State{
+		b.state.Add(usr.IDString(), botstate.State{
 			Step: step,
 			Data: operation{
 				name:      opName,
@@ -384,7 +465,7 @@ func (b *Bot) HandleText(c tele.Context) error {
 }
 
 // categoriesKeyboard builds inline keyboard with categories.
-func (b *Bot) categoriesKeyboard(ctx context.Context, usr domain.User, nextStep domain.Step, ct domain.CatType, other bool) (*tele.ReplyMarkup, error) {
+func (b *Bot) categoriesKeyboard(ctx context.Context, usr domain.User, nextStep botstate.Step, ct domain.CatType, other bool) (*tele.ReplyMarkup, error) {
 	// Ask for category select (only if operation with the same name not found)
 	cats, err := b.category.ListByUserID(ctx, usr.ID, ct)
 	if err != nil {
@@ -420,7 +501,6 @@ func (b *Bot) categoriesKeyboard(ctx context.Context, usr domain.User, nextStep 
 	}
 
 	btnRows = append(btnRows, kb.Row(btnCancel(kb, usr.Language)))
-
 	kb.Inline(btnRows...)
 
 	return kb, nil
@@ -451,7 +531,7 @@ type operation struct {
 	occuredAt time.Time
 }
 
-func (b *Bot) HandleCallback(c tele.Context) error {
+func (b *Bot) handleCallback(c tele.Context) error {
 	usr, ok := userFromContext(c)
 	if !ok {
 		return errUserNotInContext
@@ -468,8 +548,8 @@ func (b *Bot) HandleCallback(c tele.Context) error {
 
 	slog.InfoContext(ctx, "callback received", "unique", cb.unique, "data", cb.data, "callback_id", telecb.ID)
 
-	switch cb.unique {
-	case domain.StepCatSelection.String():
+	switch botstate.Step(cb.unique) {
+	case botstate.StepCatSelection:
 		state, ok := b.state.Get(usr.IDString())
 		if !ok {
 			return fmt.Errorf("currency selection callback: %w", errStateNotFound)
@@ -503,28 +583,28 @@ func (b *Bot) HandleCallback(c tele.Context) error {
 		}
 
 		return c.Edit(msg.Getf(msg.ExpenseSaved, usr.Language, op.money.String(), usr.Currency, cat.Name, op.name))
-	case domain.StepCatRenameTypeSelection.String():
-		kb, err := b.categoriesKeyboard(ctx, usr, domain.StepCatRenameSelection, domain.CatType(cb.data), false)
+	case botstate.StepCatRenameTypeSelection:
+		kb, err := b.categoriesKeyboard(ctx, usr, botstate.StepCatRenameSelection, domain.CatType(cb.data), false)
 		if err != nil {
 			return fmt.Errorf("categories keyboard in callback: %w", err)
 		}
 
-		b.state.Add(usr.IDString(), domain.State{Step: domain.StepCatRenameSelection})
+		b.state.Add(usr.IDString(), botstate.State{Step: botstate.StepCatRenameSelection})
 
 		return c.Edit(msg.Get(msg.CatRenameSelection, usr.Language), kb)
-	case domain.StepCatRenameSelection.String():
+	case botstate.StepCatRenameSelection:
 		cat, err := b.category.FindByID(ctx, cb.data)
 		if err != nil {
 			return fmt.Errorf("category not found on category rename: %w", err)
 		}
 
-		b.state.Add(usr.IDString(), domain.State{
-			Step: domain.StepCatRename,
+		b.state.Add(usr.IDString(), botstate.State{
+			Step: botstate.StepCatRename,
 			Data: cat,
 		})
 
 		return c.Edit(msg.Getf(msg.CatRename, usr.Language, cat.Name))
-	case domain.StepCurrSelection.String():
+	case botstate.StepCurrSelection:
 		defer b.state.Remove(usr.IDString())
 
 		usr, err := b.user.Update(ctx, domain.User{
@@ -541,14 +621,14 @@ func (b *Bot) HandleCallback(c tele.Context) error {
 		}
 
 		return c.Edit(msg.Getf(msg.CurrSaved, usr.Language, usr.Currency, usr.Currency))
-	case domain.StepCatAddTypeSelection.String():
-		b.state.Add(usr.IDString(), domain.State{
-			Step: domain.StepCatAdd,
+	case botstate.StepCatAddTypeSelection:
+		b.state.Add(usr.IDString(), botstate.State{
+			Step: botstate.StepCatAdd,
 			Data: domain.CatType(cb.data),
 		})
-		slog.InfoContext(ctx, "added step on category add type selection", "step", domain.StepCatAdd, "data", cb.data)
+		slog.InfoContext(ctx, "added step on category add type selection", "step", botstate.StepCatAdd, "data", cb.data)
 		return c.Edit(msg.Get(msg.CatAdd, usr.Language))
-	case domain.StepLangSelection.String():
+	case botstate.StepLangSelection:
 		defer b.state.Remove(usr.IDString())
 
 		usr, err := b.user.Update(ctx, domain.User{
@@ -560,8 +640,12 @@ func (b *Bot) HandleCallback(c tele.Context) error {
 			return fmt.Errorf("language not set in callback: %w", err)
 		}
 
+		if err = b.setCommands(usr.Language); err != nil {
+			slog.ErrorContext(ctx, "commands not set on language update", "cause", err.Error())
+		}
+
 		return c.Edit(msg.Getf(msg.LangSaved, usr.Language, iso6391.NativeName(usr.Language)))
-	case domain.StepCancel.String():
+	case botstate.StepCancel:
 		b.state.Remove(usr.IDString())
 		return c.Edit(msg.Get(msg.OperationCanceled, usr.Language))
 	default:

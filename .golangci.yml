@@ -1,0 +1,16 @@
+linters:
+  enable-all: true
+  disable:
+    - gci
+    - depguard
+    - gomnd
+    - execinquery
+    - testableexamples
+    - exhaustruct
+    - ginkgolinter
+    - gofmt
+    - loggercheck
+    - maintidx
+    - zerologlint
+    - testpackage
+    - revive

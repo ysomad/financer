@@ -2,11 +2,16 @@ package msg
 
 import "fmt"
 
-type Type uint8
+type ID uint8
 
 const (
-	InternalError Type = iota
+	InternalError ID = iota
 	OperationCanceled
+	CmdListCategories
+	CmdAddCategory
+	CmdRenameCategory
+	CmdSetLanguage
+	CmdSetCurrency
 
 	// Currency set
 	CurrSelection
@@ -54,143 +59,174 @@ const (
 	BtnExpenses
 )
 
-var messages = map[Type]map[string]string{
+type Message struct {
+	RU string
+	EN string
+}
+
+var messages = map[ID]Message{
 	// General
 	InternalError: {
-		"ru": "Произошла неизвестная ошибка, попробуйте позже",
-		"en": "Internal server error, please try later",
+		RU: "Произошла неизвестная ошибка, попробуйте позже",
+		EN: "Internal server error, please try later",
 	},
 	OperationCanceled: {
-		"ru": "Текущая операция отменена",
-		"en": "Current operation is canceled",
+		RU: "Текущая операция отменена",
+		EN: "Current operation is canceled",
+	},
+	CmdListCategories: {
+		RU: "Список категорий",
+		EN: "List categories",
+	},
+	CmdAddCategory: {
+		RU: "Добавить категорию",
+		EN: "Add category",
+	},
+	CmdRenameCategory: {
+		RU: "Переименовать категорию",
+		EN: "Rename category",
+	},
+	CmdSetCurrency: {
+		RU: "Изменить валюту по умолчанию",
+		EN: "Change default currency",
+	},
+	CmdSetLanguage: {
+		RU: "Изменить язык",
+		EN: "Change language",
 	},
 
 	// Steps
 	CurrSelection: {
-		"ru": "Выбери из списка или отправь любую валюту в ISO-4217 формате (например UAH, KZT, GBP и другие)",
-		"en": "Choose from list or send any other currency in ISO-4217 format (for example UAH, KZT, GBP etc)",
+		RU: "Выбери из списка или отправь любую валюту в ISO-4217 формате (например UAH, KZT, GBP и другие)",
+		EN: "Choose from list or send any other currency in ISO-4217 format (for example UAH, KZT, GBP etc)",
 	},
 	CurrSaved: {
-		"ru": "<b>%s</b> сохранена как валюта по умолчанию, для следующей команды без указания валюты я буду использовать <b>%s</b>",
-		"en": "<b>%s</b> saved as your default currency, next time you send me a command without specifying currency I'll use <b>%s</b>",
+		RU: "<b>%s</b> сохранена как валюта по умолчанию, для следующей команды без указания валюты я буду использовать <b>%s</b>",
+		EN: "<b>%s</b> saved as your default currency, next time you send me a command without specifying currency I'll use <b>%s</b>",
 	},
 	CatSelection: {
-		"ru": "Выбери категорию расхода или дохода для учета",
-		"en": "Choose category for the accounted expense or income",
+		RU: "Выбери категорию расхода или дохода для учета",
+		EN: "Choose category for the accounted expense or income",
 	},
 	LangSelection: {
-		"ru": "Выбери язык с помощью которого я буду с тобой общаться",
-		"en": "Select language which I'll be using for chatting with you",
+		RU: "Выбери язык с помощью которого я буду с тобой общаться",
+		EN: "Select language which I'll be using for chatting with you",
 	},
 	LangSaved: {
-		"ru": "Язык изменен на <b>%s</b>",
-		"en": "Language was set to <b>%s</b>",
+		RU: "Язык изменен на <b>%s</b>",
+		EN: "Language was set to <b>%s</b>",
 	},
 	ExpenseSaved: {
-		"ru": "Потрачено <b>%s %s</b> в категории %s\n\n<i>%s</i>",
-		"en": "Spent <b>%s %s</b> in %s category\n\n<i>%s</i>",
+		RU: "Потрачено <b>%s %s</b> в категории %s\n\n<i>%s</i>",
+		EN: "Spent <b>%s %s</b> in %s category\n\n<i>%s</i>",
 	},
 	IncomeSaved: {
-		"ru": "Заработано <b>%s %s</b> в категории %s\n\n<i>%s</i>",
-		"en": "Earned <b>%s %s</b> in %s category\n\n<i>%s</i>",
+		RU: "Заработано <b>%s %s</b> в категории %s\n\n<i>%s</i>",
+		EN: "Earned <b>%s %s</b> in %s category\n\n<i>%s</i>",
 	},
 	CatRenameTypeSelection: {
-		"ru": "Категорию расходов или доходов хочешь переименовать?",
-		"en": "Category of expenses or income would like to rename?",
+		RU: "Категорию расходов или доходов хочешь переименовать?",
+		EN: "Category of expenses or income would like to rename?",
 	},
 	CatRenameSelection: {
-		"ru": "Какую категорию хочешь переименовать?",
-		"en": "Which category you want to rename?",
+		RU: "Какую категорию хочешь переименовать?",
+		EN: "Which category you want to rename?",
 	},
 	CatRename: {
-		"ru": "Как теперь будет называться категория <b>%s</b>?",
-		"en": "What will <b>%s</b> category be called now?",
+		RU: "Как теперь будет называться категория <b>%s</b>?",
+		EN: "What will <b>%s</b> category be called now?",
 	},
 	CatRenamed: {
-		"ru": "Категория <b>%s</b> переименована в <b>%s</b>",
-		"en": "Category <b>%s</b> renamed to <b>%s</b>",
+		RU: "Категория <b>%s</b> переименована в <b>%s</b>",
+		EN: "Category <b>%s</b> renamed to <b>%s</b>",
 	},
 	CatAddTypeSelection: {
-		"ru": "Категорию расходов или доходов хочешь добавить?",
-		"en": "Category of expenses or income would like to add?",
+		RU: "Категорию расходов или доходов хочешь добавить?",
+		EN: "Category of expenses or income would like to add?",
 	},
 	CatAdd: {
-		"ru": "Как будет называться новая категория?",
-		"en": "What will new category be called?",
+		RU: "Как будет называться новая категория?",
+		EN: "What will new category be called?",
 	},
 	CatAdded: {
-		"ru": "Категория <b>%s</b> успешно создана",
-		"en": "Category <b>%s</b> successfully created",
+		RU: "Категория <b>%s</b> успешно создана",
+		EN: "Category <b>%s</b> successfully created",
 	},
 
 	// Logic errors
 	InvalidCurr: {
-		"ru": "Некорректный формат валюты, отправь валюту в ISO-4217 формате",
-		"en": "Invalid currency format, provide currency code in ISO-4217 format",
+		RU: "Некорректный формат валюты, отправь валюту в ISO-4217 формате",
+		EN: "Invalid currency format, provide currency code in ISO-4217 format",
 	},
 
 	// Message titles
 	ExpenseCatsTitle: {
-		"ru": "➖ Категории расходов",
-		"en": "➖ Expense categories",
+		RU: "➖ Категории расходов",
+		EN: "➖ Expense categories",
 	},
 	IncomeCatsTitle: {
-		"ru": "➕ Категории доходов",
-		"en": "➕ Income categories",
+		RU: "➕ Категории доходов",
+		EN: "➕ Income categories",
 	},
 	InvalidOperationFmt: {
-		"ru": "Некорректный формат операции",
-		"en": "Invalid operation format",
+		RU: "Некорректный формат операции",
+		EN: "Invalid operation format",
 	},
 
-	// buttons
+	// Buttons
 	BtnRUB: {
-		"ru": "🇷🇺 Рубли",
-		"en": "🇷🇺 Rubles",
+		RU: "🇷🇺 Рубли",
+		EN: "🇷🇺 Rubles",
 	},
 	BtnUSD: {
-		"ru": "🇺🇸 Американские доллары",
-		"en": "🇺🇸 Dollars",
+		RU: "🇺🇸 Американские доллары",
+		EN: "🇺🇸 Dollars",
 	},
 	BtnEUR: {
-		"ru": "🇪🇺 Евро",
-		"en": "🇪🇺 Euros",
+		RU: "🇪🇺 Евро",
+		EN: "🇪🇺 Euros",
 	},
 	BtnCancel: {
-		"ru": "Отмена",
-		"en": "Cancel",
+		RU: "Отмена",
+		EN: "Cancel",
 	},
 	BtnRUS: {
-		"ru": "🇷🇺 Русский",
-		"en": "🇷🇺 Russian",
+		RU: "🇷🇺 Русский",
+		EN: "🇷🇺 Russian",
 	},
 	BtnENG: {
-		"ru": "🇺🇸 Английский",
-		"en": "🇺🇸 English",
+		RU: "🇺🇸 Английский",
+		EN: "🇺🇸 English",
 	},
 	BtnOther: {
-		"ru": "🤷 Другое",
-		"en": "🤷 Other",
+		RU: "🤷 Другое",
+		EN: "🤷 Other",
 	},
 	BtnIncome: {
-		"ru": "📈 Доходы",
-		"en": "📈 Income",
+		RU: "📈 Доходы",
+		EN: "📈 Income",
 	},
 	BtnExpenses: {
-		"ru": "📉 Расходы",
-		"en": "📉 Expenses",
+		RU: "📉 Расходы",
+		EN: "📉 Expenses",
 	},
 }
 
-func Get(t Type, lang string) string {
-	msg, ok := messages[t][lang]
+func Get(id ID, lang string) string {
+	msg, ok := messages[id]
 	if !ok {
-		return messages[InternalError]["en"]
+		return messages[InternalError].EN
 	}
-
-	return msg
+	switch lang {
+	case "en":
+		return msg.EN
+	case "ru":
+		return msg.RU
+	default:
+		return msg.EN
+	}
 }
 
-func Getf(t Type, lang string, args ...any) string {
-	return fmt.Sprintf(Get(t, lang), args...)
+func Getf(id ID, lang string, args ...any) string {
+	return fmt.Sprintf(Get(id, lang), args...)
 }

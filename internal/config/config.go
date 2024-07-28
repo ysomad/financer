@@ -5,7 +5,7 @@ type Config struct {
 	AccessToken string   `env:"TELEGRAM_ACCESS_TOKEN" env-required:"true"`
 	Verbose     bool     `toml:"verbose"`
 	Postgres    Postgres `toml:"postgres"`
-	CommitHash  string
+	Version     string   `env:"VERSION"`
 }
 
 type Postgres struct {
